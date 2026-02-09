@@ -1,0 +1,49 @@
+{
+  "name": "x402-bazaar",
+  "version": "1.1.0",
+  "description": "CLI to set up x402 Bazaar MCP server for AI agents. One command to connect your agent to the marketplace.",
+  "type": "module",
+  "main": "bin/cli.js",
+  "bin": {
+    "x402-bazaar": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/cli.js",
+    "test": "node bin/cli.js --help"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "x402",
+    "mcp",
+    "ai-agents",
+    "marketplace",
+    "crypto",
+    "usdc",
+    "base",
+    "coinbase",
+    "claude",
+    "cursor",
+    "model-context-protocol"
+  ],
+  "author": "x402 Bazaar",
+  "license": "MIT",
+  "homepage": "https://x402bazaar.org",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Wintyx57/x402-bazaar-cli"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "inquirer": "^9.3.0",
+    "ora": "^8.0.1"
+  }
+}

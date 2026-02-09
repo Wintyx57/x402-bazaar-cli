@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.seed.json
+agent-seed.json
+server-seed.json
+.DS_Store
+*.log
