@@ -4,6 +4,10 @@ import { Command } from 'commander';
 import { initCommand } from '../src/commands/init.js';
 import { configCommand } from '../src/commands/config.js';
 import { statusCommand } from '../src/commands/status.js';
+import { listCommand } from '../src/commands/list.js';
+import { searchCommand } from '../src/commands/search.js';
+import { callCommand } from '../src/commands/call.js';
+import { walletCommand } from '../src/commands/wallet.js';
 import chalk from 'chalk';
 
 // Global error handler
@@ -21,7 +25,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('1.2.2');
+  .version('2.0.0');
 
 program
   .command('init')
@@ -49,17 +53,53 @@ program
   .option('--server-url <url>', 'Server URL to check', 'https://x402-api.onrender.com')
   .action(statusCommand);
 
+program
+  .command('list')
+  .description('List all services on x402 Bazaar')
+  .option('--chain <chain>', 'Filter by chain (base or skale)')
+  .option('--category <category>', 'Filter by category (ai, data, weather, etc.)')
+  .option('--free', 'Show only free services')
+  .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')
+  .action(listCommand);
+
+program
+  .command('search <query>')
+  .description('Search for services by keyword')
+  .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')
+  .action(searchCommand);
+
+program
+  .command('call <endpoint>')
+  .description('Call a marketplace endpoint (testing/debugging)')
+  .option('--param <key=value>', 'Add parameter (can be used multiple times)', (value, previous) => {
+    return previous ? [...previous, value] : [value];
+  }, [])
+  .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')
+  .action(callCommand);
+
+program
+  .command('wallet')
+  .description('Check USDC wallet balance on Base')
+  .option('--address <address>', 'Ethereum address to check')
+  .action(walletCommand);
+
 // Default: show help if no command given
 if (process.argv.length <= 2) {
   console.log('');
-  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI'));
+  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v2'));
   console.log('');
-  console.log('  Quick start:');
-  console.log(chalk.cyan('    npx x402-bazaar init') + chalk.dim('      Full interactive setup'));
-  console.log(chalk.cyan('    npx x402-bazaar status') + chalk.dim('    Check server connection'));
-  console.log(chalk.cyan('    npx x402-bazaar config') + chalk.dim('    Generate MCP config'));
+  console.log('  Setup commands:');
+  console.log(chalk.cyan('    npx x402-bazaar init') + chalk.dim('          Full interactive setup'));
+  console.log(chalk.cyan('    npx x402-bazaar config') + chalk.dim('        Generate MCP config'));
+  console.log(chalk.cyan('    npx x402-bazaar status') + chalk.dim('        Check server connection'));
   console.log('');
-  console.log(chalk.dim('  Run with --help for all options'));
+  console.log('  Marketplace commands:');
+  console.log(chalk.cyan('    npx x402-bazaar list') + chalk.dim('          Browse all services'));
+  console.log(chalk.cyan('    npx x402-bazaar search <query>') + chalk.dim('  Find services by keyword'));
+  console.log(chalk.cyan('    npx x402-bazaar call <endpoint>') + chalk.dim(' Test an API endpoint'));
+  console.log(chalk.cyan('    npx x402-bazaar wallet') + chalk.dim('        Check wallet balance'));
+  console.log('');
+  console.log(chalk.dim('  Run any command with --help for detailed options'));
   console.log('');
   process.exit(0);
 }
