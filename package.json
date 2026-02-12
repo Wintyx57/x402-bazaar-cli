@@ -1,6 +1,6 @@
 {
   "name": "x402-bazaar",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "CLI to set up x402 Bazaar MCP server for AI agents. One command to connect your agent to the marketplace.",
   "type": "module",
   "main": "bin/cli.js",

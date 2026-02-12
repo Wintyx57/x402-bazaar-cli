@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
+import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
 import { log } from '../utils/logger.js';
 import { isInteractive, promptOrDefault, printNonInteractiveHint } from '../utils/prompt.js';
@@ -126,8 +127,18 @@ export async function initCommand(options) {
       copyFileSync(mcpSource, mcpServerDest);
       spinner.text = 'Copied mcp-server.mjs from local project...';
     } else {
-      spinner.text = 'Generating MCP server file...';
-      writeFileSync(mcpServerDest, generateMcpServerFile());
+      spinner.text = 'Downloading MCP server from GitHub...';
+      try {
+        const dlRes = await fetch('https://raw.githubusercontent.com/Wintyx57/x402-backend/main/mcp-server.mjs');
+        if (!dlRes.ok) throw new Error(`HTTP ${dlRes.status}`);
+        writeFileSync(mcpServerDest, await dlRes.text());
+      } catch (dlErr) {
+        spinner.fail(`Could not download MCP server: ${dlErr.message}`);
+        log.error('Download the file manually from:');
+        log.dim('  https://github.com/Wintyx57/x402-backend/blob/main/mcp-server.mjs');
+        log.dim(`  Save it to: ${mcpServerDest}`);
+        process.exit(1);
+      }
     }
 
     // Create package.json for the MCP server runtime
@@ -135,14 +146,16 @@ export async function initCommand(options) {
     if (!existsSync(pkgJsonPath)) {
       writeFileSync(pkgJsonPath, JSON.stringify({
         name: 'x402-bazaar-mcp',
-        version: '1.0.0',
+        version: '2.0.0',
         type: 'module',
         private: true,
         dependencies: {
-          '@coinbase/coinbase-sdk': '^0.25.0',
+          'viem': '^2.0.0',
           '@modelcontextprotocol/sdk': '^1.26.0',
           'dotenv': '^17.2.4',
           'zod': '^4.3.6',
+          'ed2curve': '^0.3.0',
+          '@scure/bip32': '^1.6.0',
         },
       }, null, 2));
     }
@@ -183,9 +196,9 @@ export async function initCommand(options) {
   console.log('');
 
   let walletMode = 'readonly';
+  let agentPrivateKey = '';
   let coinbaseApiKey = '';
   let coinbaseApiSecret = '';
-  let seedPath = '';
   let maxBudget = '1.00';
   let network = 'mainnet';
   let serverUrl = options.serverUrl || 'https://x402-api.onrender.com';
@@ -200,31 +213,79 @@ export async function initCommand(options) {
       message: 'How do you want to configure payments?',
       choices: [
         {
-          name: `${chalk.bold('I have Coinbase API keys')} — Full access (search, register, pay)`,
-          value: 'existing',
+          name: `${chalk.bold('Generate a new wallet')} — Creates a fresh Ethereum wallet automatically (Recommended)`,
+          value: 'generate',
         },
         {
-          name: `${chalk.bold('Create a new wallet')} — Guide me through setup`,
-          value: 'new',
+          name: `${chalk.bold('Import private key')} — Use an existing Ethereum private key`,
+          value: 'import',
+        },
+        {
+          name: `${chalk.bold('Coinbase API keys')} — Legacy: use Coinbase CDP seed file`,
+          value: 'coinbase',
         },
         {
           name: `${chalk.bold('Read-only mode')} — Browse marketplace for free (no payments)`,
           value: 'readonly',
         },
       ],
-      default: 'readonly',
+      default: 'generate',
     }]);
 
     walletMode = mode;
 
-    if (mode === 'existing') {
+    if (mode === 'generate') {
+      agentPrivateKey = '0x' + randomBytes(32).toString('hex');
+      log.success('New wallet generated!');
+
+      // Derive address using viem (installed in step 2)
+      try {
+        const addr = execSync(
+          `node --input-type=module -e "import{privateKeyToAccount}from'viem/accounts';console.log(privateKeyToAccount('${agentPrivateKey}').address)"`,
+          { cwd: installDir, stdio: 'pipe', timeout: 15000 }
+        ).toString().trim();
+        log.info(`Wallet address: ${chalk.bold(addr)}`);
+        console.log('');
+        log.dim('  Fund this address with USDC on Base to start paying for APIs.');
+        log.dim(`  View on BaseScan: https://basescan.org/address/${addr}`);
+      } catch {
+        log.info('Wallet address will be shown when you first use the MCP server.');
+        log.dim('  Use the get_wallet_balance tool to see your address.');
+      }
+    }
+
+    if (mode === 'import') {
+      if (!isInteractive()) {
+        log.warn('Cannot enter private key in a non-interactive terminal.');
+        log.info('Set AGENT_PRIVATE_KEY in your .env file manually after setup.');
+        walletMode = 'readonly';
+      } else {
+        const { key } = await promptOrDefault([{
+          type: 'password',
+          name: 'key',
+          message: 'Ethereum private key (0x...):',
+          mask: '*',
+          validate: (v) => {
+            const trimmed = v.trim();
+            if (trimmed.length === 0) return 'Private key is required';
+            const hex = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+            if (!/^[0-9a-fA-F]{64}$/.test(hex)) return 'Invalid private key (expected 64 hex characters)';
+            return true;
+          },
+        }]);
+        agentPrivateKey = key.trim().startsWith('0x') ? key.trim() : `0x${key.trim()}`;
+        log.success('Private key imported.');
+      }
+    }
+
+    if (mode === 'coinbase') {
       if (!isInteractive()) {
         log.warn('Cannot enter API credentials in a non-interactive terminal.');
         log.info('Falling back to read-only mode.');
-        log.dim('  To configure wallet, run in a standalone terminal:');
-        log.dim('    npx x402-bazaar init');
         walletMode = 'readonly';
       } else {
+        log.dim('  Legacy mode: requires Coinbase CDP API keys + agent-seed.json');
+        console.log('');
         const walletAnswers = await promptOrDefault([
           {
             type: 'input',
@@ -243,43 +304,12 @@ export async function initCommand(options) {
         coinbaseApiKey = walletAnswers.coinbaseApiKey.trim();
         coinbaseApiSecret = walletAnswers.coinbaseApiSecret.trim();
 
-        // Check if agent-seed.json exists
         const existingSeed = join(installDir, 'agent-seed.json');
         if (!existsSync(existingSeed)) {
-          log.warn('No agent-seed.json found. You will need to create a wallet.');
-          log.dim('  Run: cd "' + installDir + '" && node -e "const{Coinbase,Wallet}=require(\'@coinbase/coinbase-sdk\');...');
-          log.dim('  Or copy your existing agent-seed.json to: ' + installDir);
+          log.warn('No agent-seed.json found.');
+          log.dim('  Copy your existing agent-seed.json to: ' + installDir);
+          log.dim('  Or re-run init and choose "Generate a new wallet" instead.');
         }
-      }
-    }
-
-    if (mode === 'new') {
-      console.log('');
-      log.info('To get Coinbase API keys:');
-      console.log('');
-      log.dim('  1. Go to https://portal.cdp.coinbase.com/');
-      log.dim('  2. Create a project (free)');
-      log.dim('  3. Go to "API Keys" and generate a key pair');
-      log.dim('  4. Save both the API Key Name and the Private Key');
-      log.dim('  5. Run npx x402-bazaar init again with your keys');
-      console.log('');
-
-      if (!isInteractive()) {
-        log.info('Continuing in read-only mode (non-interactive terminal).');
-        walletMode = 'readonly';
-      } else {
-        const { proceed } = await promptOrDefault([{
-          type: 'confirm',
-          name: 'proceed',
-          message: 'Continue in read-only mode for now?',
-          default: true,
-        }]);
-
-        if (!proceed) {
-          log.info('Run npx x402-bazaar init when you have your API keys.');
-          process.exit(0);
-        }
-        walletMode = 'readonly';
       }
     }
 
@@ -315,7 +345,6 @@ export async function initCommand(options) {
 
     network = configAnswers.network;
     maxBudget = configAnswers.maxBudget;
-    seedPath = join(installDir, 'agent-seed.json');
   }
 
   console.log('');
@@ -330,9 +359,9 @@ export async function initCommand(options) {
     serverUrl,
     maxBudget,
     network,
+    agentPrivateKey,
     coinbaseApiKey,
     coinbaseApiSecret,
-    seedPath,
     readOnly: walletMode === 'readonly',
   });
 
@@ -342,9 +371,9 @@ export async function initCommand(options) {
       serverUrl,
       maxBudget,
       network,
+      agentPrivateKey,
       coinbaseApiKey,
       coinbaseApiSecret,
-      seedPath,
     });
     const envPath = join(installDir, '.env');
     writeFileSync(envPath, envContent);
@@ -487,319 +516,3 @@ function writeConfig(envInfo, newConfig) {
   }
 }
 
-/**
- * Generate a standalone MCP server file.
- * Used as fallback when the local x402-bazaar project is not found.
- */
-function generateMcpServerFile() {
-  return `import 'dotenv/config';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const { Coinbase, Wallet } = require('@coinbase/coinbase-sdk');
-
-// ─── Config ──────────────────────────────────────────────────────────
-const SERVER_URL = process.env.X402_SERVER_URL || 'https://x402-api.onrender.com';
-const MAX_BUDGET = parseFloat(process.env.MAX_BUDGET_USDC || '1.00');
-const NETWORK = process.env.NETWORK || 'mainnet';
-const explorerBase = NETWORK === 'testnet'
-    ? 'https://sepolia.basescan.org'
-    : 'https://basescan.org';
-const networkLabel = NETWORK === 'testnet' ? 'Base Sepolia' : 'Base Mainnet';
-
-// ─── Budget Tracking ─────────────────────────────────────────────────
-let sessionSpending = 0;
-const sessionPayments = [];
-
-// ─── Wallet ──────────────────────────────────────────────────────────
-let wallet = null;
-let walletReady = false;
-
-async function initWallet() {
-    if (walletReady) return;
-
-    Coinbase.configure({
-        apiKeyName: process.env.COINBASE_API_KEY,
-        privateKey: process.env.COINBASE_API_SECRET,
-    });
-
-    const seedPath = process.env.AGENT_SEED_PATH || 'agent-seed.json';
-    const fs = await import('fs');
-    const seedData = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
-    const seedWalletId = Object.keys(seedData)[0];
-
-    wallet = await Wallet.fetch(seedWalletId);
-    await wallet.loadSeed(seedPath);
-    walletReady = true;
-}
-
-// ─── x402 Payment Flow ──────────────────────────────────────────────
-async function payAndRequest(url, options = {}) {
-    const res = await fetch(url, options);
-    const body = await res.json();
-
-    if (res.status !== 402) {
-        return body;
-    }
-
-    // HTTP 402 — Payment Required
-    const details = body.payment_details;
-    const cost = parseFloat(details.amount);
-
-    // Budget check
-    if (sessionSpending + cost > MAX_BUDGET) {
-        throw new Error(
-            \`Budget limit reached. Spent: \${sessionSpending.toFixed(2)} USDC / \${MAX_BUDGET.toFixed(2)} USDC limit. \` +
-            \`This call costs \${cost} USDC. Increase MAX_BUDGET_USDC env var to allow more spending.\`
-        );
-    }
-
-    await initWallet();
-
-    const transfer = await wallet.createTransfer({
-        amount: details.amount,
-        assetId: Coinbase.assets.Usdc,
-        destination: details.recipient,
-    });
-    const confirmed = await transfer.wait({ timeoutSeconds: 120 });
-    const txHash = confirmed.getTransactionHash();
-
-    // Track spending
-    sessionSpending += cost;
-    sessionPayments.push({
-        amount: cost,
-        txHash,
-        timestamp: new Date().toISOString(),
-        endpoint: url.replace(SERVER_URL, ''),
-    });
-
-    // Retry with payment proof
-    const retryHeaders = { ...options.headers, 'X-Payment-TxHash': txHash };
-    const retryRes = await fetch(url, { ...options, headers: retryHeaders });
-    const result = await retryRes.json();
-
-    // Enrich result with payment info
-    result._payment = {
-        amount: details.amount,
-        currency: 'USDC',
-        txHash,
-        explorer: \`\${explorerBase}/tx/\${txHash}\`,
-        session_spent: sessionSpending.toFixed(2),
-        session_remaining: (MAX_BUDGET - sessionSpending).toFixed(2),
-    };
-
-    return result;
-}
-
-// ─── MCP Server ─────────────────────────────────────────────────────
-const server = new McpServer({
-    name: 'x402-bazaar',
-    version: '1.1.0',
-});
-
-// --- Tool: discover_marketplace (FREE) ---
-server.tool(
-    'discover_marketplace',
-    'Discover the x402 Bazaar marketplace. Returns available endpoints, total services, and protocol info. Free — no payment needed.',
-    {},
-    async () => {
-        try {
-            const res = await fetch(SERVER_URL);
-            const data = await res.json();
-            return {
-                content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: search_services (0.05 USDC) ---
-server.tool(
-    'search_services',
-    \`Search for API services on x402 Bazaar by keyword. Costs 0.05 USDC (paid automatically). Budget: \${MAX_BUDGET.toFixed(2)} USDC per session. Check get_budget_status before calling if unsure about remaining budget.\`,
-    { query: z.string().describe('Search keyword (e.g. "weather", "crypto", "ai")') },
-    async ({ query }) => {
-        try {
-            const result = await payAndRequest(
-                \`\${SERVER_URL}/search?q=\${encodeURIComponent(query)}\`
-            );
-            return {
-                content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: list_services (0.05 USDC) ---
-server.tool(
-    'list_services',
-    \`List all API services available on x402 Bazaar. Costs 0.05 USDC (paid automatically). Budget: \${MAX_BUDGET.toFixed(2)} USDC per session.\`,
-    {},
-    async () => {
-        try {
-            const result = await payAndRequest(\`\${SERVER_URL}/services\`);
-            return {
-                content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: find_tool_for_task (0.05 USDC — smart service lookup) ---
-server.tool(
-    'find_tool_for_task',
-    \`Describe what you need in plain English and get the best matching API service ready to call. Returns the single best match with name, URL, price, and usage instructions. Costs 0.05 USDC. Budget: \${MAX_BUDGET.toFixed(2)} USDC per session.\`,
-    { task: z.string().describe('What you need, in natural language (e.g. "get current weather for a city", "translate text to French")') },
-    async ({ task }) => {
-        try {
-            const stopWords = new Set(['i', 'need', 'want', 'to', 'a', 'an', 'the', 'for', 'of', 'and', 'or', 'in', 'on', 'with', 'that', 'this', 'get', 'find', 'me', 'my', 'some', 'can', 'you', 'do', 'is', 'it', 'be', 'have', 'use', 'please', 'should', 'would', 'could']);
-            const keywords = task.toLowerCase()
-                .replace(/[^a-z0-9\\s]/g, '')
-                .split(/\\s+/)
-                .filter(w => w.length > 2 && !stopWords.has(w));
-            const query = keywords.slice(0, 3).join(' ') || task.slice(0, 30);
-
-            const result = await payAndRequest(
-                \`\${SERVER_URL}/search?q=\${encodeURIComponent(query)}\`
-            );
-
-            const services = result.data || result.services || [];
-            if (services.length === 0) {
-                return {
-                    content: [{ type: 'text', text: JSON.stringify({
-                        found: false,
-                        query_used: query,
-                        message: \`No services found matching "\${task}". Try rephrasing or use search_services with different keywords.\`,
-                        _payment: result._payment,
-                    }, null, 2) }],
-                };
-            }
-
-            const best = services[0];
-            return {
-                content: [{ type: 'text', text: JSON.stringify({
-                    found: true,
-                    query_used: query,
-                    service: {
-                        name: best.name,
-                        description: best.description,
-                        url: best.url,
-                        price_usdc: best.price_usdc,
-                        tags: best.tags,
-                    },
-                    action: \`Call this API using call_api("\${best.url}"). \${Number(best.price_usdc) === 0 ? 'This API is free.' : \`This API costs \${best.price_usdc} USDC per call.\`}\`,
-                    alternatives_count: services.length - 1,
-                    _payment: result._payment,
-                }, null, 2) }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: call_api (FREE — calls external APIs) ---
-server.tool(
-    'call_api',
-    'Call an external API URL and return the response. Use this to fetch real data from service URLs discovered on the marketplace. Free — no marketplace payment needed.',
-    { url: z.string().url().describe('The full API URL to call') },
-    async ({ url }) => {
-        try {
-            const res = await fetch(url);
-            const text = await res.text();
-            let parsed;
-            try {
-                parsed = JSON.parse(text);
-            } catch {
-                parsed = { response: text.slice(0, 5000) };
-            }
-            return {
-                content: [{ type: 'text', text: JSON.stringify(parsed, null, 2) }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: get_wallet_balance (FREE) ---
-server.tool(
-    'get_wallet_balance',
-    'Check the USDC balance of the agent wallet on-chain. Free.',
-    {},
-    async () => {
-        try {
-            await initWallet();
-            const balance = await wallet.getBalance(Coinbase.assets.Usdc);
-            const address = (await wallet.getDefaultAddress()).getId();
-            return {
-                content: [{
-                    type: 'text',
-                    text: JSON.stringify({
-                        address,
-                        balance_usdc: balance.toString(),
-                        network: networkLabel,
-                        explorer: \`\${explorerBase}/address/\${address}\`,
-                    }, null, 2),
-                }],
-            };
-        } catch (err) {
-            return {
-                content: [{ type: 'text', text: \`Error: \${err.message}\` }],
-                isError: true,
-            };
-        }
-    }
-);
-
-// --- Tool: get_budget_status (FREE) ---
-server.tool(
-    'get_budget_status',
-    'Check the session spending budget. Shows how much USDC has been spent, remaining budget, and a list of all payments made this session. Free — call this before paid requests to verify budget.',
-    {},
-    async () => {
-        return {
-            content: [{
-                type: 'text',
-                text: JSON.stringify({
-                    budget_limit: MAX_BUDGET.toFixed(2) + ' USDC',
-                    spent: sessionSpending.toFixed(2) + ' USDC',
-                    remaining: (MAX_BUDGET - sessionSpending).toFixed(2) + ' USDC',
-                    payments_count: sessionPayments.length,
-                    payments: sessionPayments,
-                    network: networkLabel,
-                }, null, 2),
-            }],
-        };
-    }
-);
-
-// ─── Start ──────────────────────────────────────────────────────────
-const transport = new StdioServerTransport();
-await server.connect(transport);
-`;
-}
