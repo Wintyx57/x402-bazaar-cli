@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('2.0.0');
+  .version('3.0.0');
 
 program
   .command('init')
@@ -70,23 +70,25 @@ program
 
 program
   .command('call <endpoint>')
-  .description('Call a marketplace endpoint (testing/debugging)')
+  .description('Call a marketplace endpoint with automatic x402 payment')
   .option('--param <key=value>', 'Add parameter (can be used multiple times)', (value, previous) => {
     return previous ? [...previous, value] : [value];
   }, [])
+  .option('--key <privateKey>', 'Private key for auto-payment (or set X402_PRIVATE_KEY env)')
   .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')
   .action(callCommand);
 
 program
   .command('wallet')
-  .description('Check USDC wallet balance on Base')
+  .description('Check USDC wallet balance or generate a new wallet')
   .option('--address <address>', 'Ethereum address to check')
+  .option('--setup', 'Generate a new wallet for auto-payment')
   .action(walletCommand);
 
 // Default: show help if no command given
 if (process.argv.length <= 2) {
   console.log('');
-  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v2'));
+  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v3'));
   console.log('');
   console.log('  Setup commands:');
   console.log(chalk.cyan('    npx x402-bazaar init') + chalk.dim('          Full interactive setup'));
@@ -96,8 +98,8 @@ if (process.argv.length <= 2) {
   console.log('  Marketplace commands:');
   console.log(chalk.cyan('    npx x402-bazaar list') + chalk.dim('          Browse all services'));
   console.log(chalk.cyan('    npx x402-bazaar search <query>') + chalk.dim('  Find services by keyword'));
-  console.log(chalk.cyan('    npx x402-bazaar call <endpoint>') + chalk.dim(' Test an API endpoint'));
-  console.log(chalk.cyan('    npx x402-bazaar wallet') + chalk.dim('        Check wallet balance'));
+  console.log(chalk.cyan('    npx x402-bazaar call <endpoint>') + chalk.dim(' Call API with auto-payment'));
+  console.log(chalk.cyan('    npx x402-bazaar wallet') + chalk.dim('        Check balance / setup wallet'));
   console.log('');
   console.log(chalk.dim('  Run any command with --help for detailed options'));
   console.log('');

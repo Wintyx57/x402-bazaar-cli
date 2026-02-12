@@ -1,7 +1,7 @@
 {
   "name": "x402-bazaar",
-  "version": "2.0.0",
-  "description": "CLI to set up x402 Bazaar MCP server for AI agents. Browse, search, and call marketplace APIs. One command to connect your agent.",
+  "version": "3.0.0",
+  "description": "CLI for x402 Bazaar — AI Agent Marketplace. Browse, call, and auto-pay APIs with USDC on Base. One command to connect your agent.",
   "type": "module",
   "main": "bin/cli.js",
   "bin": {
@@ -44,6 +44,7 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "inquirer": "^9.3.0",
-    "ora": "^8.0.1"
+    "ora": "^8.0.1",
+    "viem": "^2.45.3"
   }
 }
