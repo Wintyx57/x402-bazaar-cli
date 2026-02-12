@@ -21,7 +21,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('1.2.1');
+  .version('1.2.2');
 
 program
   .command('init')

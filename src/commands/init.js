@@ -191,8 +191,8 @@ export async function initCommand(options) {
 
   console.log('');
 
-  // ─── Step 3: Wallet Configuration ───────────────────────────────────
-  log.step(3, 'Configuring wallet...');
+  // ─── Step 3: Network & Wallet Configuration ────────────────────────
+  log.step(3, 'Configuring network and wallet...');
   console.log('');
 
   let walletMode = 'readonly';
@@ -207,6 +207,42 @@ export async function initCommand(options) {
     log.info('Skipping wallet setup (--no-wallet)');
     walletMode = 'readonly';
   } else {
+    // Network & Budget first — needed for wallet funding instructions
+    const configOverrides = {};
+    if (options.network) configOverrides.network = options.network;
+    if (options.budget) configOverrides.maxBudget = options.budget;
+
+    const configAnswers = await promptOrDefault([
+      {
+        type: 'list',
+        name: 'network',
+        message: 'Which network?',
+        choices: [
+          { name: 'Base Mainnet (real USDC)', value: 'mainnet' },
+          { name: 'Base Sepolia (testnet, free tokens for testing)', value: 'testnet' },
+          { name: 'SKALE Europa (zero gas fees — advanced users)', value: 'skale' },
+        ],
+        default: 'mainnet',
+      },
+      {
+        type: 'input',
+        name: 'maxBudget',
+        message: 'Max USDC budget per session (safety limit):',
+        default: '1.00',
+        validate: (v) => {
+          const n = parseFloat(v);
+          if (isNaN(n) || n <= 0) return 'Must be a positive number';
+          if (n > 100) return 'Maximum is 100 USDC per session';
+          return true;
+        },
+      },
+    ], configOverrides);
+
+    network = configAnswers.network;
+    maxBudget = configAnswers.maxBudget;
+
+    console.log('');
+
     const { mode } = await promptOrDefault([{
       type: 'list',
       name: 'mode',
@@ -247,19 +283,36 @@ export async function initCommand(options) {
         ).toString().trim();
         console.log('');
         log.info(`Wallet address: ${chalk.bold(walletAddress)}`);
-        log.dim(`  BaseScan: https://basescan.org/address/${walletAddress}`);
+        if (network === 'skale') {
+          log.dim(`  Explorer: https://elated-tan-skat.explorer.mainnet.skalenodes.com/address/${walletAddress}`);
+        } else {
+          log.dim(`  BaseScan: https://basescan.org/address/${walletAddress}`);
+        }
         console.log('');
         log.separator();
-        log.info(chalk.bold('To activate payments, fund this wallet from MetaMask:'));
-        console.log('');
-        log.dim(`  ${chalk.white('1.')} Open MetaMask and switch to the ${chalk.bold('Base')} network`);
-        log.dim(`     (Chain ID: 8453 — add it via https://chainlist.org/chain/8453)`);
-        log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
-        log.dim(`     (Even $1 USDC is enough to start — each API call costs $0.005-$0.05)`);
-        log.dim(`  ${chalk.white('3.')} Send a tiny bit of ${chalk.bold('ETH')} to the same address for gas`);
-        log.dim(`     (${chalk.white('~$0.01 of ETH on Base')} is enough for hundreds of transactions)`);
-        console.log('');
-        log.warn(`IMPORTANT: Send on the ${chalk.bold('Base')} network only — not Ethereum mainnet!`);
+        if (network === 'skale') {
+          log.info(chalk.bold('To activate payments, fund this wallet:'));
+          console.log('');
+          log.dim(`  ${chalk.white('1.')} Bridge USDC to SKALE Europa`);
+          log.dim(`     (Use https://portal.skale.space/bridge or any SKALE bridge)`);
+          log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
+          log.dim(`     (Even $1 USDC is enough — each API call costs $0.005-$0.05)`);
+          log.dim(`  ${chalk.white('3.')} Get free sFUEL for gas at https://www.sfuelstation.com/`);
+          log.dim(`     (sFUEL is free — no ETH needed on SKALE!)`);
+          console.log('');
+          log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE Europa')} only — not Base or Ethereum!`);
+        } else {
+          log.info(chalk.bold('To activate payments, fund this wallet from MetaMask:'));
+          console.log('');
+          log.dim(`  ${chalk.white('1.')} Open MetaMask and switch to the ${chalk.bold('Base')} network`);
+          log.dim(`     (Chain ID: 8453 — add it via https://chainlist.org/chain/8453)`);
+          log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
+          log.dim(`     (Even $1 USDC is enough to start — each API call costs $0.005-$0.05)`);
+          log.dim(`  ${chalk.white('3.')} Send a tiny bit of ${chalk.bold('ETH')} to the same address for gas`);
+          log.dim(`     (${chalk.white('~$0.01 of ETH on Base')} is enough for hundreds of transactions)`);
+          console.log('');
+          log.warn(`IMPORTANT: Send on the ${chalk.bold('Base')} network only — not Ethereum mainnet!`);
+        }
         log.separator();
       } catch {
         log.info('Wallet address will be shown when you first use the MCP server.');
@@ -325,39 +378,6 @@ export async function initCommand(options) {
         }
       }
     }
-
-    // Network & Budget — use CLI flags as overrides
-    const configOverrides = {};
-    if (options.network) configOverrides.network = options.network;
-    if (options.budget) configOverrides.maxBudget = options.budget;
-
-    const configAnswers = await promptOrDefault([
-      {
-        type: 'list',
-        name: 'network',
-        message: 'Which network?',
-        choices: [
-          { name: 'Base Mainnet (real USDC)', value: 'mainnet' },
-          { name: 'Base Sepolia (testnet, free tokens for testing)', value: 'testnet' },
-        ],
-        default: 'mainnet',
-      },
-      {
-        type: 'input',
-        name: 'maxBudget',
-        message: 'Max USDC budget per session (safety limit):',
-        default: '1.00',
-        validate: (v) => {
-          const n = parseFloat(v);
-          if (isNaN(n) || n <= 0) return 'Must be a positive number';
-          if (n > 100) return 'Maximum is 100 USDC per session';
-          return true;
-        },
-      },
-    ], configOverrides);
-
-    network = configAnswers.network;
-    maxBudget = configAnswers.maxBudget;
   }
 
   console.log('');
@@ -461,7 +481,7 @@ export async function initCommand(options) {
     `Environment:    ${targetEnv.label}`,
     `Install dir:    ${installDir}`,
     `Server:         ${serverUrl}`,
-    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : 'Base Sepolia'}`,
+    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : network === 'skale' ? 'SKALE Europa' : 'Base Sepolia'}`,
     `Budget limit:   ${maxBudget} USDC / session`,
     `Wallet:         ${walletLabel}`,
     `Services:       ${serviceCount > 0 ? serviceCount + ' available' : 'check with npx x402-bazaar status'}`,
@@ -470,7 +490,9 @@ export async function initCommand(options) {
     '',
     ...(walletMode === 'generate' ? [
       'Before your agent can pay for APIs:',
-      '  1. Send USDC + a little ETH to your wallet on Base',
+      network === 'skale'
+        ? '  1. Bridge USDC to your wallet on SKALE Europa + get free sFUEL'
+        : '  1. Send USDC + a little ETH to your wallet on Base',
       '  2. Restart your IDE',
       '',
     ] : []),
