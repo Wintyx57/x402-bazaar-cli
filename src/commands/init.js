@@ -239,15 +239,28 @@ export async function initCommand(options) {
       log.success('New wallet generated!');
 
       // Derive address using viem (installed in step 2)
+      let walletAddress = '';
       try {
-        const addr = execSync(
+        walletAddress = execSync(
           `node --input-type=module -e "import{privateKeyToAccount}from'viem/accounts';console.log(privateKeyToAccount('${agentPrivateKey}').address)"`,
           { cwd: installDir, stdio: 'pipe', timeout: 15000 }
         ).toString().trim();
-        log.info(`Wallet address: ${chalk.bold(addr)}`);
         console.log('');
-        log.dim('  Fund this address with USDC on Base to start paying for APIs.');
-        log.dim(`  View on BaseScan: https://basescan.org/address/${addr}`);
+        log.info(`Wallet address: ${chalk.bold(walletAddress)}`);
+        log.dim(`  BaseScan: https://basescan.org/address/${walletAddress}`);
+        console.log('');
+        log.separator();
+        log.info(chalk.bold('To activate payments, fund this wallet from MetaMask:'));
+        console.log('');
+        log.dim(`  ${chalk.white('1.')} Open MetaMask and switch to the ${chalk.bold('Base')} network`);
+        log.dim(`     (Chain ID: 8453 — add it via https://chainlist.org/chain/8453)`);
+        log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
+        log.dim(`     (Even $1 USDC is enough to start — each API call costs $0.005-$0.05)`);
+        log.dim(`  ${chalk.white('3.')} Send a tiny bit of ${chalk.bold('ETH')} to the same address for gas`);
+        log.dim(`     (${chalk.white('~$0.01 of ETH on Base')} is enough for hundreds of transactions)`);
+        console.log('');
+        log.warn(`IMPORTANT: Send on the ${chalk.bold('Base')} network only — not Ethereum mainnet!`);
+        log.separator();
       } catch {
         log.info('Wallet address will be shown when you first use the MCP server.');
         log.dim('  Use the get_wallet_balance tool to see your address.');
@@ -438,17 +451,29 @@ export async function initCommand(options) {
     'claude-code': 'Restart Claude Code to activate the MCP server.',
   };
 
+  const walletLabel = walletMode === 'readonly'
+    ? 'Read-only (no payments)'
+    : walletMode === 'generate'
+      ? 'New wallet (needs funding)'
+      : 'Configured';
+
   const summaryLines = [
     `Environment:    ${targetEnv.label}`,
     `Install dir:    ${installDir}`,
     `Server:         ${serverUrl}`,
     `Network:        ${network === 'mainnet' ? 'Base Mainnet' : 'Base Sepolia'}`,
     `Budget limit:   ${maxBudget} USDC / session`,
-    `Wallet:         ${walletMode === 'readonly' ? 'Read-only (no payments)' : 'Configured'}`,
+    `Wallet:         ${walletLabel}`,
     `Services:       ${serviceCount > 0 ? serviceCount + ' available' : 'check with npx x402-bazaar status'}`,
     '',
     restartMsg[targetEnv.name] || 'Configure your AI client with the generated JSON above.',
     '',
+    ...(walletMode === 'generate' ? [
+      'Before your agent can pay for APIs:',
+      '  1. Send USDC + a little ETH to your wallet on Base',
+      '  2. Restart your IDE',
+      '',
+    ] : []),
     'Then try asking your agent:',
     '  "Search for weather APIs on x402 Bazaar"',
     '  "List all available services on the marketplace"',
