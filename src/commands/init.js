@@ -1,7 +1,7 @@
 import inquirer from 'inquirer';
 import ora from 'ora';
 import chalk from 'chalk';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, chmodSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
 import { randomBytes } from 'crypto';
@@ -275,11 +275,12 @@ export async function initCommand(options) {
       log.success('New wallet generated!');
 
       // Derive address using viem (installed in step 2)
+      // Pass private key via env var to avoid shell exposure (ps aux, bash history)
       let walletAddress = '';
       try {
         walletAddress = execSync(
-          `node --input-type=module -e "import{privateKeyToAccount}from'viem/accounts';console.log(privateKeyToAccount('${agentPrivateKey}').address)"`,
-          { cwd: installDir, stdio: 'pipe', timeout: 15000 }
+          `node --input-type=module -e "import{privateKeyToAccount}from'viem/accounts';console.log(privateKeyToAccount(process.env._X402_PK).address)"`,
+          { cwd: installDir, stdio: 'pipe', timeout: 15000, env: { ...process.env, _X402_PK: agentPrivateKey } }
         ).toString().trim();
         console.log('');
         log.info(`Wallet address: ${chalk.bold(walletAddress)}`);
@@ -410,6 +411,7 @@ export async function initCommand(options) {
     });
     const envPath = join(installDir, '.env');
     writeFileSync(envPath, envContent);
+    try { chmodSync(envPath, 0o600); } catch {}
     log.success(`.env created at ${chalk.dim(envPath)}`);
   }
 

@@ -118,15 +118,15 @@ export async function callCommand(endpoint, options) {
       console.log('');
       log.info('To pay automatically, provide your private key:');
       console.log('');
-      log.dim('  Option 1: Environment variable');
+      log.dim('  Option 1: Environment variable (recommended)');
       log.dim('    export X402_PRIVATE_KEY=0xYourPrivateKey');
       log.dim('    npx x402-bazaar call /api/weather --param city=Paris');
       console.log('');
-      log.dim('  Option 2: --key flag');
-      log.dim('    npx x402-bazaar call /api/weather --param city=Paris --key 0xYourKey');
-      console.log('');
-      log.dim('  Option 3: Generate a new wallet');
+      log.dim('  Option 2: Generate a wallet file');
       log.dim('    npx x402-bazaar wallet --setup');
+      console.log('');
+      log.dim('  Option 3: --key flag (reads from wallet.json file)');
+      log.dim('    npx x402-bazaar call /api/weather --param city=Paris --key ~/.x402-bazaar/wallet.json');
       console.log('');
       log.dim('  Option 4: Use the MCP server (via Claude/Cursor)');
       log.dim('    npx x402-bazaar init');
@@ -177,6 +177,15 @@ export async function callCommand(endpoint, options) {
  */
 function resolvePrivateKey(options) {
   if (options.key) {
+    const raw = options.key.trim();
+    // Warn if a raw private key is passed directly as CLI argument (visible in ps aux, shell history)
+    const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
+    if (/^[0-9a-fA-F]{64}$/.test(hex)) {
+      console.warn('\n\x1b[33m⚠ WARNING: Passing private keys as CLI arguments is insecure (visible in process list & shell history).\x1b[0m');
+      console.warn('\x1b[33m  Use one of these safer alternatives instead:\x1b[0m');
+      console.warn('\x1b[33m    export X402_PRIVATE_KEY=0xYourKey\x1b[0m');
+      console.warn('\x1b[33m    npx x402-bazaar wallet --setup  (creates ~/.x402-bazaar/wallet.json)\x1b[0m\n');
+    }
     return normalizeKey(options.key);
   }
 

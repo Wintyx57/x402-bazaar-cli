@@ -169,6 +169,7 @@ async function setupWallet() {
       network: 'base',
       created: new Date().toISOString(),
     }, null, 2), 'utf-8');
+    try { fs.chmodSync(walletPath, 0o600); } catch {}
 
     spinner.succeed('Wallet generated!');
     console.log('');
