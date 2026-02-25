@@ -1,5 +1,7 @@
 # x402-bazaar
 
+![npm](https://img.shields.io/npm/v/x402-bazaar) ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) ![npm downloads](https://img.shields.io/npm/dm/x402-bazaar) ![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+
 > Connect your AI agent to the x402 Bazaar marketplace in one command.
 
 x402 Bazaar is an autonomous marketplace where AI agents buy and sell API services using the HTTP 402 protocol with USDC payments on Base L2.
