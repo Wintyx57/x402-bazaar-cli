@@ -145,11 +145,18 @@ x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 - Node.js >= 18
 - npm or npx
 
-## Links
+## Ecosystem
 
-- Website: https://x402bazaar.org
-- Dashboard: https://x402-api.onrender.com/dashboard
-- GitHub: https://github.com/Wintyx57/x402-bazaar-cli
+| Repository | Description |
+|---|---|
+| **[x402-backend](https://github.com/Wintyx57/x402-backend)** | API server, 69 native endpoints, payment middleware, MCP server |
+| **[x402-frontend](https://github.com/Wintyx57/x402-frontend)** | React + TypeScript UI, wallet connect |
+| **[x402-bazaar-cli](https://github.com/Wintyx57/x402-bazaar-cli)** | `npx x402-bazaar` -- CLI with 7 commands (this repo) |
+| **[x402-sdk](https://github.com/Wintyx57/x402-sdk)** | TypeScript SDK for AI agents |
+| **[x402-langchain](https://github.com/Wintyx57/x402-langchain)** | Python LangChain tools |
+| **[x402-fast-monetization-template](https://github.com/Wintyx57/x402-fast-monetization-template)** | FastAPI template to monetize any Python function |
+
+**Live:** [x402bazaar.org](https://x402bazaar.org) | **API:** [x402-api.onrender.com](https://x402-api.onrender.com)
 
 ## License
 
