@@ -58,6 +58,60 @@ npx x402-bazaar status
 npx x402-bazaar status --server-url https://your-server.com
 ```
 
+### `npx x402-bazaar list`
+
+List all available services on the marketplace. Supports filters.
+
+```bash
+# List all services
+npx x402-bazaar list
+
+# Filter by blockchain network
+npx x402-bazaar list --chain base
+npx x402-bazaar list --chain skale
+
+# Filter by category
+npx x402-bazaar list --category ai
+npx x402-bazaar list --category search
+
+# Show only free services
+npx x402-bazaar list --free
+```
+
+### `npx x402-bazaar search <query>`
+
+Search for a specific service by keyword.
+
+```bash
+npx x402-bazaar search "weather"
+npx x402-bazaar search "image generation"
+npx x402-bazaar search "sentiment analysis"
+```
+
+### `npx x402-bazaar call <url> [--key wallet.json]`
+
+Call an API endpoint with automatic USDC payment. The CLI handles the HTTP 402 flow transparently.
+
+```bash
+# Call with default wallet
+npx x402-bazaar call https://x402-api.onrender.com/api/weather?city=Paris
+
+# Call with a specific wallet key file
+npx x402-bazaar call https://x402-api.onrender.com/api/search?q=AI --key ./wallet.json
+```
+
+### `npx x402-bazaar wallet [--create|--balance]`
+
+Manage the agent wallet: create a new one or check its USDC balance.
+
+```bash
+# Create a new agent wallet (generates a key file)
+npx x402-bazaar wallet --create
+
+# Check the USDC balance of the current wallet
+npx x402-bazaar wallet --balance
+```
+
 ## Supported Environments
 
 | Environment | Config Location |
@@ -95,7 +149,7 @@ x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 
 - Website: https://x402bazaar.org
 - Dashboard: https://x402-api.onrender.com/dashboard
-- GitHub: https://github.com/Wintyx57
+- GitHub: https://github.com/Wintyx57/x402-bazaar-cli
 
 ## License
 
