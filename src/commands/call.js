@@ -181,10 +181,10 @@ function resolvePrivateKey(options) {
     // Warn if a raw private key is passed directly as CLI argument (visible in ps aux, shell history)
     const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
     if (/^[0-9a-fA-F]{64}$/.test(hex)) {
-      console.warn('\n\x1b[33m⚠ WARNING: Passing private keys as CLI arguments is insecure (visible in process list & shell history).\x1b[0m');
-      console.warn('\x1b[33m  Use one of these safer alternatives instead:\x1b[0m');
-      console.warn('\x1b[33m    export X402_PRIVATE_KEY=0xYourKey\x1b[0m');
-      console.warn('\x1b[33m    npx x402-bazaar wallet --setup  (creates ~/.x402-bazaar/wallet.json)\x1b[0m\n');
+      console.log('');
+      console.warn(chalk.yellow('⚠️  Warning: Using --key on the command line exposes your private key in shell history.'));
+      console.warn(chalk.yellow('⚠️  Prefer setting the X402_PRIVATE_KEY environment variable instead.'));
+      console.log('');
     }
     return normalizeKey(options.key);
   }

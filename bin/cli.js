@@ -74,7 +74,7 @@ program
   .option('--param <key=value>', 'Add parameter (can be used multiple times)', (value, previous) => {
     return previous ? [...previous, value] : [value];
   }, [])
-  .option('--key <privateKey>', 'Private key for auto-payment (or set X402_PRIVATE_KEY env)')
+  .option('--key <privateKey>', 'Private key for auto-payment. ⚠️  WARNING: Using --key on CLI exposes your key in shell history. Prefer setting X402_PRIVATE_KEY environment variable instead.')
   .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')
   .action(callCommand);
 
