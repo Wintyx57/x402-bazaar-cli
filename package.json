@@ -1,6 +1,6 @@
 {
   "name": "x402-bazaar",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "CLI for x402 Bazaar — AI Agent Marketplace. Browse, call, and auto-pay APIs with USDC on Base. One command to connect your agent.",
   "type": "module",
   "main": "bin/cli.js",

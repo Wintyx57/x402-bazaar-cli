@@ -99,17 +99,32 @@ export async function callCommand(endpoint, options) {
       const price = paymentInfo.payment_details?.amount || paymentInfo.price;
       const payTo = paymentInfo.payment_details?.recipient || paymentInfo.payment_details?.walletAddress || paymentInfo.paymentAddress;
 
+      // Split-native mode: provider_wallet is present in payment_details
+      const providerWallet = paymentInfo.payment_details?.provider_wallet || null;
+      const serverSplit = paymentInfo.payment_details?.split || null;
+      const isSplitMode = !!(providerWallet);
+
       if (price) {
         log.info(`Price: ${chalk.cyan.bold(`${price} USDC`)}`);
       }
-      if (payTo) {
+      if (isSplitMode) {
+        log.dim(`  Mode: split native (95% provider / 5% platform)`);
+        log.dim(`  Provider wallet: ${providerWallet}`);
+        log.dim(`  Platform wallet: ${payTo}`);
+      } else if (payTo) {
         log.dim(`  Pay to: ${payTo}`);
       }
       console.log('');
 
       // Auto-pay if key is available
       if (autoPay && price && payTo) {
-        await handleAutoPayment(privateKey, payTo, price, finalUrl, fetchOptions);
+        if (isSplitMode) {
+          await handleSplitAutoPayment(
+            privateKey, price, providerWallet, payTo, serverSplit, finalUrl, fetchOptions
+          );
+        } else {
+          await handleAutoPayment(privateKey, payTo, price, finalUrl, fetchOptions);
+        }
         return;
       }
 
@@ -213,6 +228,96 @@ function normalizeKey(key) {
   if (!key.startsWith('0x')) key = '0x' + key;
   if (!/^0x[a-fA-F0-9]{64}$/.test(key)) return null;
   return key;
+}
+
+/**
+ * Handle split native payment (95% to provider, 5% to platform) and retry.
+ *
+ * On success the retry request carries two separate tx-hash headers:
+ *   X-Payment-TxHash-Provider — hash of the 95% transfer to the provider
+ *   X-Payment-TxHash-Platform — hash of the 5% transfer to the platform
+ *
+ * @param {string}      privateKey    - Agent private key (hex, with 0x)
+ * @param {number}      totalPrice    - Full price in USDC
+ * @param {string}      providerWallet - Provider wallet address (95% recipient)
+ * @param {string}      platformWallet - Platform wallet address (5% recipient)
+ * @param {object|null} serverSplit   - Optional split amounts from 402 payment_details.split
+ * @param {string}      url           - API endpoint URL
+ * @param {object}      fetchOptions  - Fetch options passed to the retry request
+ */
+async function handleSplitAutoPayment(
+  privateKey, totalPrice, providerWallet, platformWallet, serverSplit, url, fetchOptions
+) {
+  const spinner = ora(
+    `Sending ${totalPrice} USDC (split: 95% provider / 5% platform)...`
+  ).start();
+
+  try {
+    const { sendSplitUsdcPayment } = await import('../lib/payment.js');
+
+    const result = await sendSplitUsdcPayment(privateKey, {
+      totalAmountUsdc: totalPrice,
+      providerWallet,
+      platformWallet,
+      serverSplit,
+    });
+
+    spinner.succeed(
+      `Split payment confirmed: ` +
+      chalk.hex('#34D399').bold(`${result.providerAmountUsdc.toFixed(6)} USDC`) +
+      ` to provider + ` +
+      chalk.hex('#34D399').bold(`${result.platformAmountUsdc.toFixed(6)} USDC`) +
+      ` to platform`
+    );
+    log.dim(`  Provider tx: ${result.explorerProvider}`);
+    log.dim(`  Platform tx: ${result.explorerPlatform}`);
+    console.log('');
+
+    // Retry with both payment proofs
+    const retrySpinner = ora('Retrying with split payment proof...').start();
+
+    const retryRes = await fetch(url, {
+      ...fetchOptions,
+      headers: {
+        ...fetchOptions.headers,
+        'X-Payment-TxHash-Provider': result.txHashProvider,
+        'X-Payment-TxHash-Platform': result.txHashPlatform,
+      },
+    });
+
+    retrySpinner.stop();
+
+    if (!retryRes.ok) {
+      console.log('');
+      log.error(`HTTP ${retryRes.status}: ${retryRes.statusText}`);
+      try {
+        const body = await retryRes.text();
+        if (body) console.log(chalk.red(body));
+      } catch { /* ignore */ }
+      console.log('');
+      process.exit(1);
+    }
+
+    await displayResponse(retryRes);
+
+  } catch (err) {
+    spinner.fail('Split payment failed');
+    console.log('');
+
+    if (err.message.includes('Insufficient USDC')) {
+      log.error(err.message);
+      log.dim('  Fund your wallet with USDC on Base.');
+      log.dim('  Check balance: npx x402-bazaar wallet --address <your-address>');
+    } else if (err.message.includes('Amount too small')) {
+      log.error(err.message);
+      log.dim('  The service price is too low for a split payment (minimum 0.0001 USDC).');
+    } else {
+      log.error(err.message);
+    }
+
+    console.log('');
+    process.exit(1);
+  }
 }
 
 /**
