@@ -194,8 +194,8 @@ async function setupWallet() {
     log.dim(`     ${chalk.cyan('npx x402-bazaar call /api/weather --param city=Paris')}`);
     log.dim('     (auto-payment will use your saved wallet)');
     console.log('');
-    log.dim('  3. Or set the env variable for any tool:');
-    log.dim(`     export X402_PRIVATE_KEY=${privateKey}`);
+    log.dim('  3. The CLI reads your wallet file automatically — no need to export the key.');
+    log.dim(`     The private key is stored securely in: ${walletPath}`);
     console.log('');
 
     log.warn('Keep your private key safe! Anyone with it can spend your funds.');
