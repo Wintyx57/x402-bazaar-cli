@@ -294,20 +294,19 @@ export async function initCommand(options) {
         if (network === 'skale') {
           log.info(chalk.bold('To activate payments, fund this wallet:'));
           console.log('');
-          log.dim(`  ${chalk.white('1.')} Bridge USDC to SKALE Europa`);
-          log.dim(`     (Use https://portal.skale.space/bridge or any SKALE bridge)`);
-          log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
+          log.dim(`  ${chalk.white('1.')} Bridge USDC from any chain → SKALE in 1 click:`);
+          log.dim(`     ${chalk.cyan('https://x402bazaar.org/fund')} (Trails SDK — ETH, Polygon, Base, Arbitrum, Optimism)`);
+          log.dim(`  ${chalk.white('2.')} Or send ${chalk.bold('USDC')} directly to: ${chalk.hex('#34D399')(walletAddress)}`);
           log.dim(`     (Even $1 USDC is enough — each API call costs $0.005-$0.05)`);
-          log.dim(`  ${chalk.white('3.')} Get free sFUEL for gas at https://www.sfuelstation.com/`);
-          log.dim(`     (sFUEL is free — no ETH needed on SKALE!)`);
+          log.dim(`  ${chalk.white('3.')} Gas (CREDITS) is auto-funded — no ETH needed on SKALE!`);
           console.log('');
-          log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE Europa')} only — not Base or Ethereum!`);
+          log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE on Base')} only — not Base or Ethereum!`);
         } else {
-          log.info(chalk.bold('To activate payments, fund this wallet from MetaMask:'));
+          log.info(chalk.bold('To activate payments, fund this wallet:'));
           console.log('');
-          log.dim(`  ${chalk.white('1.')} Open MetaMask and switch to the ${chalk.bold('Base')} network`);
-          log.dim(`     (Chain ID: 8453 — add it via https://chainlist.org/chain/8453)`);
-          log.dim(`  ${chalk.white('2.')} Send ${chalk.bold('USDC')} to: ${chalk.hex('#34D399')(walletAddress)}`);
+          log.dim(`  ${chalk.white('1.')} Bridge USDC from any chain → Base in 1 click:`);
+          log.dim(`     ${chalk.cyan('https://x402bazaar.org/fund')} (Trails SDK — ETH, Polygon, Arbitrum, Optimism)`);
+          log.dim(`  ${chalk.white('2.')} Or send ${chalk.bold('USDC')} directly to: ${chalk.hex('#34D399')(walletAddress)}`);
           log.dim(`     (Even $1 USDC is enough to start — each API call costs $0.005-$0.05)`);
           log.dim(`  ${chalk.white('3.')} Send a tiny bit of ${chalk.bold('ETH')} to the same address for gas`);
           log.dim(`     (${chalk.white('~$0.01 of ETH on Base')} is enough for hundreds of transactions)`);
