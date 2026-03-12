@@ -504,31 +504,41 @@ export async function initCommand(options) {
 
   log.box('What\'s next?', summaryLines.join('\n'));
 
-  // Print critical info AFTER the box so it's visible even when output is truncated
-  if (walletMode === 'generate') {
-    console.log('');
-    log.info(chalk.bold('Next steps after restarting your IDE:'));
-    console.log('');
-    if (network === 'skale') {
-      log.info(`  ${chalk.white('1.')} Ask your agent to run ${chalk.cyan('setup_wallet')} — this auto-funds 0.1 CREDITS for gas (free!)`);
-      log.info(`  ${chalk.white('2.')} Fund your wallet with USDC on SKALE on Base:`);
-      log.dim(`     ${chalk.cyan('https://x402bazaar.org/fund')} — Bridge from any chain in 1 click`);
-      log.dim(`     ${chalk.cyan('https://bridge.skale.space')} — Native SKALE bridge`);
-      log.info(`  ${chalk.white('3.')} Start using paid APIs! Try: ${chalk.dim('"Search for weather APIs on x402 Bazaar"')}`);
-    } else {
-      log.info(`  ${chalk.white('1.')} Ask your agent to run ${chalk.cyan('setup_wallet')} to verify your wallet`);
-      log.info(`  ${chalk.white('2.')} Fund your wallet with USDC + ETH on Base`);
-      log.info(`  ${chalk.white('3.')} Start using paid APIs! Try: ${chalk.dim('"Search for weather APIs on x402 Bazaar"')}`);
-    }
-    console.log('');
-  }
-
   log.dim('  Need help?   https://x402bazaar.org');
-  log.dim('  Dashboard:   https://x402-api.onrender.com/dashboard');
   log.dim('  Re-configure: npx x402-bazaar init');
   console.log('');
 
   printNonInteractiveHint('init');
+
+  // === CRITICAL: Print AFTER everything else so it's the LAST thing in output ===
+  // Claude Code AI summarizes tool output — only tail lines are reliably shown
+  if (walletMode === 'generate' && network === 'skale') {
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+    console.log('  IMPORTANT — After restarting, ask your agent to run: setup_wallet');
+    console.log('');
+    console.log('  This will:');
+    console.log('    - Auto-fund 0.1 CREDITS for gas on SKALE (free, no ETH needed)');
+    console.log('    - Show your wallet balance on both Base and SKALE');
+    console.log('    - Provide bridge links to fund your wallet with USDC');
+    console.log('');
+    console.log('  Fund USDC: https://x402bazaar.org/fund (bridge from any chain)');
+    console.log('  SKALE Bridge: https://bridge.skale.space');
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+  } else if (walletMode === 'generate') {
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+    console.log('  IMPORTANT — After restarting, ask your agent to run: setup_wallet');
+    console.log('  Then fund your wallet with USDC + ETH on Base.');
+    console.log('  Bridge: https://x402bazaar.org/fund');
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+  }
 }
 
 /**
