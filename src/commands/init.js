@@ -504,7 +504,17 @@ export async function initCommand(options) {
 
   log.box('What\'s next?', summaryLines.join('\n'));
 
-  console.log('');
+  // Print critical info AFTER the box so it's visible even when output is truncated
+  if (walletMode === 'generate' && network === 'skale') {
+    console.log('');
+    log.success(chalk.bold('✅ Gas (CREDITS) will be auto-funded on first use — no ETH needed!'));
+    console.log('');
+    log.info(chalk.bold('💰 Fund your wallet with USDC on SKALE on Base:'));
+    log.dim(`   ${chalk.cyan('https://x402bazaar.org/fund')} — Bridge from any chain in 1 click`);
+    log.dim(`   ${chalk.cyan('https://bridge.skale.space')} — Native SKALE bridge`);
+    console.log('');
+  }
+
   log.dim('  Need help?   https://x402bazaar.org');
   log.dim('  Dashboard:   https://x402-api.onrender.com/dashboard');
   log.dim('  Re-configure: npx x402-bazaar init');
