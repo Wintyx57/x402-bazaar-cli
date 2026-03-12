@@ -505,13 +505,21 @@ export async function initCommand(options) {
   log.box('What\'s next?', summaryLines.join('\n'));
 
   // Print critical info AFTER the box so it's visible even when output is truncated
-  if (walletMode === 'generate' && network === 'skale') {
+  if (walletMode === 'generate') {
     console.log('');
-    log.success(chalk.bold('✅ Gas (CREDITS) will be auto-funded on first use — no ETH needed!'));
+    log.info(chalk.bold('Next steps after restarting your IDE:'));
     console.log('');
-    log.info(chalk.bold('💰 Fund your wallet with USDC on SKALE on Base:'));
-    log.dim(`   ${chalk.cyan('https://x402bazaar.org/fund')} — Bridge from any chain in 1 click`);
-    log.dim(`   ${chalk.cyan('https://bridge.skale.space')} — Native SKALE bridge`);
+    if (network === 'skale') {
+      log.info(`  ${chalk.white('1.')} Ask your agent to run ${chalk.cyan('setup_wallet')} — this auto-funds 0.1 CREDITS for gas (free!)`);
+      log.info(`  ${chalk.white('2.')} Fund your wallet with USDC on SKALE on Base:`);
+      log.dim(`     ${chalk.cyan('https://x402bazaar.org/fund')} — Bridge from any chain in 1 click`);
+      log.dim(`     ${chalk.cyan('https://bridge.skale.space')} — Native SKALE bridge`);
+      log.info(`  ${chalk.white('3.')} Start using paid APIs! Try: ${chalk.dim('"Search for weather APIs on x402 Bazaar"')}`);
+    } else {
+      log.info(`  ${chalk.white('1.')} Ask your agent to run ${chalk.cyan('setup_wallet')} to verify your wallet`);
+      log.info(`  ${chalk.white('2.')} Fund your wallet with USDC + ETH on Base`);
+      log.info(`  ${chalk.white('3.')} Start using paid APIs! Try: ${chalk.dim('"Search for weather APIs on x402 Bazaar"')}`);
+    }
     console.log('');
   }
 
