@@ -524,7 +524,7 @@ export async function initCommand(options) {
     console.log('    - Provide bridge links to fund your wallet with USDC');
     console.log('');
     console.log('  Fund USDC: https://x402bazaar.org/fund (bridge from any chain)');
-    console.log('  SKALE Bridge: https://bridge.skale.space');
+    console.log('  Alternative bridge: https://bridge.skale.space');
     console.log('');
     console.log('='.repeat(70));
     console.log('');
