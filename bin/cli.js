@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('3.0.0');
+  .version('3.2.1');
 
 program
   .command('init')
@@ -33,7 +33,7 @@ program
   .option('--env <environment>', 'Force environment (claude-desktop, cursor, claude-code, vscode-continue, generic)')
   .option('--no-wallet', 'Skip wallet configuration (read-only mode)')
   .option('--server-url <url>', 'Custom server URL', 'https://x402-api.onrender.com')
-  .option('--network <network>', 'Network: mainnet or testnet', 'mainnet')
+  .option('--network <network>', 'Network: skale, mainnet, or testnet')
   .option('--budget <amount>', 'Max USDC budget per session', '1.00')
   .action(initCommand);
 
@@ -43,7 +43,7 @@ program
   .option('--env <environment>', 'Target environment (claude-desktop, cursor, claude-code, vscode-continue, generic)')
   .option('--output <path>', 'Output file path')
   .option('--server-url <url>', 'Custom server URL', 'https://x402-api.onrender.com')
-  .option('--network <network>', 'Network: mainnet or testnet', 'mainnet')
+  .option('--network <network>', 'Network: skale, mainnet, or testnet')
   .option('--budget <amount>', 'Max USDC budget per session', '1.00')
   .action(configCommand);
 

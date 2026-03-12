@@ -200,7 +200,7 @@ export async function initCommand(options) {
   let coinbaseApiKey = '';
   let coinbaseApiSecret = '';
   let maxBudget = '1.00';
-  let network = 'mainnet';
+  let network = 'skale';
   let serverUrl = options.serverUrl || 'https://x402-api.onrender.com';
 
   if (options.wallet === false) {
