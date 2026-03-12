@@ -218,11 +218,11 @@ export async function initCommand(options) {
         name: 'network',
         message: 'Which network?',
         choices: [
-          { name: 'Base Mainnet (real USDC)', value: 'mainnet' },
+          { name: 'SKALE on Base (ultra-low gas ~$0.0007/tx — recommended for AI agents)', value: 'skale' },
+          { name: 'Base Mainnet (real USDC, requires ETH for gas)', value: 'mainnet' },
           { name: 'Base Sepolia (testnet, free tokens for testing)', value: 'testnet' },
-          { name: 'SKALE Europa (zero gas fees — advanced users)', value: 'skale' },
         ],
-        default: 'mainnet',
+        default: 'skale',
       },
       {
         type: 'input',
@@ -285,7 +285,7 @@ export async function initCommand(options) {
         console.log('');
         log.info(`Wallet address: ${chalk.bold(walletAddress)}`);
         if (network === 'skale') {
-          log.dim(`  Explorer: https://elated-tan-skat.explorer.mainnet.skalenodes.com/address/${walletAddress}`);
+          log.dim(`  Explorer: https://skale-base-explorer.skalenodes.com/address/${walletAddress}`);
         } else {
           log.dim(`  BaseScan: https://basescan.org/address/${walletAddress}`);
         }
@@ -300,7 +300,7 @@ export async function initCommand(options) {
           log.dim(`     (Even $1 USDC is enough — each API call costs $0.005-$0.05)`);
           log.dim(`  ${chalk.white('3.')} Gas (CREDITS) is auto-funded — no ETH needed on SKALE!`);
           console.log('');
-          log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE on Base')} only — not Base or Ethereum!`);
+          log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE on Base')} (chain ID 1187947933) — not Base or Ethereum!`);
         } else {
           log.info(chalk.bold('To activate payments, fund this wallet:'));
           console.log('');
@@ -482,7 +482,7 @@ export async function initCommand(options) {
     `Environment:    ${targetEnv.label}`,
     `Install dir:    ${installDir}`,
     `Server:         ${serverUrl}`,
-    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : network === 'skale' ? 'SKALE Europa' : 'Base Sepolia'}`,
+    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : network === 'skale' ? 'SKALE on Base' : 'Base Sepolia'}`,
     `Budget limit:   ${maxBudget} USDC / session`,
     `Wallet:         ${walletLabel}`,
     `Services:       ${serviceCount > 0 ? serviceCount + ' available' : 'check with npx x402-bazaar status'}`,
@@ -492,7 +492,7 @@ export async function initCommand(options) {
     ...(walletMode === 'generate' ? [
       'Before your agent can pay for APIs:',
       network === 'skale'
-        ? '  1. Bridge USDC to your wallet on SKALE Europa + get free sFUEL'
+        ? '  1. Bridge USDC → SKALE on Base: https://x402bazaar.org/fund (CREDITS auto-funded!)'
         : '  1. Send USDC + a little ETH to your wallet on Base',
       '  2. Restart your IDE',
       '',
