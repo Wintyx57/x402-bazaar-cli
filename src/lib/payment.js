@@ -49,7 +49,7 @@ function buildClients(privateKey) {
  */
 function buildPolygonClients(privateKey) {
   const account = privateKeyToAccount(privateKey);
-  const transport = http('https://polygon-rpc.com');
+  const transport = http('https://polygon-bor-rpc.publicnode.com');
   const walletClient = createWalletClient({ account, chain: polygon, transport });
   const publicClient = createPublicClient({ chain: polygon, transport });
   return { walletClient, publicClient, account };
