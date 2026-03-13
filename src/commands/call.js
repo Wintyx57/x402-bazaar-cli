@@ -104,10 +104,19 @@ export async function callCommand(endpoint, options) {
       const serverSplit = paymentInfo.payment_details?.split || null;
       const isSplitMode = !!(providerWallet);
 
+      // Facilitator mode (Polygon Phase 2): payment_mode === 'fee_splitter'
+      const paymentMode = paymentInfo.payment_details?.payment_mode || null;
+      const facilitatorUrl = paymentInfo.payment_details?.facilitator || paymentInfo.facilitator || null;
+      const isFacilitatorMode = paymentMode === 'fee_splitter' && !!facilitatorUrl;
+
       if (price) {
         log.info(`Price: ${chalk.cyan.bold(`${price} USDC`)}`);
       }
-      if (isSplitMode) {
+      if (isFacilitatorMode) {
+        log.dim(`  Mode: fee_splitter via Polygon facilitator (gas-free)`);
+        log.dim(`  Facilitator: ${facilitatorUrl}`);
+        log.dim(`  Recipient: ${payTo}`);
+      } else if (isSplitMode) {
         log.dim(`  Mode: split native (95% provider / 5% platform)`);
         log.dim(`  Provider wallet: ${providerWallet}`);
         log.dim(`  Platform wallet: ${payTo}`);
@@ -118,7 +127,11 @@ export async function callCommand(endpoint, options) {
 
       // Auto-pay if key is available
       if (autoPay && price && payTo) {
-        if (isSplitMode) {
+        if (isFacilitatorMode) {
+          await handleFacilitatorPayment(
+            privateKey, price, facilitatorUrl, paymentInfo.payment_details, finalUrl, fetchOptions
+          );
+        } else if (isSplitMode) {
           await handleSplitAutoPayment(
             privateKey, price, providerWallet, payTo, serverSplit, finalUrl, fetchOptions
           );
@@ -228,6 +241,85 @@ function normalizeKey(key) {
   if (!key.startsWith('0x')) key = '0x' + key;
   if (!/^0x[a-fA-F0-9]{64}$/.test(key)) return null;
   return key;
+}
+
+/**
+ * Handle Polygon facilitator payment (EIP-3009 gas-free, fee_splitter mode) and retry.
+ *
+ * Flow:
+ *   1. Sign EIP-3009 TransferWithAuthorization off-chain ($0 gas for user)
+ *   2. POST to facilitator /settle — facilitator executes on-chain
+ *   3. Retry the API call with the txHash as proof (X-Payment-TxHash header)
+ *
+ * Falls back to standard sendUsdcPayment on the same recipient if the facilitator fails.
+ *
+ * @param {string} privateKey      - Agent private key (hex, with 0x)
+ * @param {number} price           - Full price in USDC
+ * @param {string} facilitatorUrl  - Facilitator base URL
+ * @param {object} details         - payment_details from the 402 response
+ * @param {string} url             - API endpoint URL
+ * @param {object} fetchOptions    - Fetch options for the retry request
+ */
+async function handleFacilitatorPayment(
+  privateKey, price, facilitatorUrl, details, url, fetchOptions
+) {
+  const spinner = ora(
+    `Signing EIP-3009 permit and settling via Polygon facilitator (gas-free)...`
+  ).start();
+
+  let txHash;
+
+  try {
+    const { sendViaFacilitator } = await import('../lib/payment.js');
+    txHash = await sendViaFacilitator(privateKey, facilitatorUrl, details, url);
+
+    spinner.succeed(
+      `Facilitator settlement confirmed: ${chalk.hex('#34D399').bold(`${price} USDC`)} ` +
+      `(gas-free via Polygon facilitator)`
+    );
+    log.dim(`  Tx: https://polygonscan.com/tx/${txHash}`);
+    console.log('');
+  } catch (facilitatorErr) {
+    spinner.warn(`Facilitator payment failed — falling back to direct transfer`);
+    log.dim(`  Reason: ${facilitatorErr.message}`);
+    console.log('');
+
+    // Fallback: direct USDC transfer on Polygon (standard sendUsdcPayment on Base
+    // is intentionally NOT used here; we log a clear message and exit so the user
+    // knows they need MATIC gas or can retry manually)
+    log.error('Fallback direct transfer not available for Polygon in facilitator mode.');
+    log.dim('  Ensure POLYGON_FACILITATOR_URL is reachable or retry later.');
+    log.dim('  You can also send USDC manually and provide --key with sufficient MATIC for gas.');
+    console.log('');
+    process.exit(1);
+  }
+
+  // Retry with facilitator payment proof
+  const retrySpinner = ora('Retrying with facilitator payment proof...').start();
+
+  const retryRes = await fetch(url, {
+    ...fetchOptions,
+    headers: {
+      ...fetchOptions.headers,
+      'X-Payment-TxHash': txHash,
+      'X-Payment-Chain':  'polygon',
+    },
+  });
+
+  retrySpinner.stop();
+
+  if (!retryRes.ok) {
+    console.log('');
+    log.error(`HTTP ${retryRes.status}: ${retryRes.statusText}`);
+    try {
+      const body = await retryRes.text();
+      if (body) console.log(chalk.red(body));
+    } catch { /* ignore */ }
+    console.log('');
+    process.exit(1);
+  }
+
+  await displayResponse(retryRes);
 }
 
 /**

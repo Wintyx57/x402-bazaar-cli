@@ -1,6 +1,7 @@
 import { createWalletClient, createPublicClient, http, parseUnits, encodeFunctionData } from 'viem';
-import { base } from 'viem/chains';
+import { base, polygon } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
+import { randomBytes } from 'crypto';
 
 const USDC_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const USDC_ABI = [
@@ -25,6 +26,9 @@ const USDC_ABI = [
 /** Minimum amount in micro-USDC (6 decimals) to allow a split payment. */
 const MIN_SPLIT_AMOUNT_RAW = 100n; // 0.0001 USDC
 
+/** USDC contract on Polygon mainnet (Circle native, 6 decimals). */
+const POLYGON_USDC_CONTRACT = '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359';
+
 /**
  * Build viem wallet + public clients for Base mainnet.
  * @param {string} privateKey
@@ -36,6 +40,161 @@ function buildClients(privateKey) {
   const walletClient = createWalletClient({ account, chain: base, transport });
   const publicClient = createPublicClient({ chain: base, transport });
   return { walletClient, publicClient, account };
+}
+
+/**
+ * Build viem wallet + public clients for Polygon mainnet.
+ * @param {string} privateKey
+ * @returns {{ walletClient, publicClient, account }}
+ */
+function buildPolygonClients(privateKey) {
+  const account = privateKeyToAccount(privateKey);
+  const transport = http('https://polygon-rpc.com');
+  const walletClient = createWalletClient({ account, chain: polygon, transport });
+  const publicClient = createPublicClient({ chain: polygon, transport });
+  return { walletClient, publicClient, account };
+}
+
+/**
+ * Sign an EIP-3009 TransferWithAuthorization off-chain (zero gas).
+ * Used for Polygon facilitator payments.
+ *
+ * @param {object} walletClient - viem wallet client (Polygon chain)
+ * @param {object} account - viem account
+ * @param {string} amountRaw - amount as string (integer, 6 decimals)
+ * @param {string} to - recipient address
+ * @param {number} validAfter - unix timestamp (usually 0)
+ * @param {number} validBefore - unix timestamp (5 min from now)
+ * @returns {{ signature: string, authorization: object }}
+ */
+async function signEIP3009Auth(walletClient, account, amountRaw, to, validAfter, validBefore) {
+  // Random bytes32 nonce (EIP-3009 uses random nonces, not sequential)
+  const nonce = '0x' + randomBytes(32).toString('hex');
+
+  const domain = {
+    name: 'USD Coin',
+    version: '2',
+    chainId: 137,
+    verifyingContract: POLYGON_USDC_CONTRACT,
+  };
+
+  const types = {
+    TransferWithAuthorization: [
+      { name: 'from',        type: 'address' },
+      { name: 'to',          type: 'address' },
+      { name: 'value',       type: 'uint256' },
+      { name: 'validAfter',  type: 'uint256' },
+      { name: 'validBefore', type: 'uint256' },
+      { name: 'nonce',       type: 'bytes32' },
+    ],
+  };
+
+  const message = {
+    from:        account.address,
+    to,
+    value:       BigInt(amountRaw),
+    validAfter:  BigInt(validAfter),
+    validBefore: BigInt(validBefore),
+    nonce,
+  };
+
+  const signature = await walletClient.signTypedData({
+    domain,
+    types,
+    primaryType: 'TransferWithAuthorization',
+    message,
+  });
+
+  return {
+    signature,
+    authorization: {
+      from:        account.address,
+      to,
+      value:       amountRaw.toString(),
+      validAfter:  validAfter.toString(),
+      validBefore: validBefore.toString(),
+      nonce,
+    },
+  };
+}
+
+/**
+ * Pay via Polygon facilitator (EIP-3009, gas-free for the user).
+ *
+ * Flow:
+ *   1. Sign EIP-3009 TransferWithAuthorization off-chain ($0 gas)
+ *   2. POST to facilitator /settle — facilitator executes on-chain
+ *   3. Return the txHash from the facilitator
+ *
+ * @param {string}  privateKey     - Hex private key (with 0x prefix)
+ * @param {string}  facilitatorUrl - Base URL of the facilitator (e.g. https://x402.polygon.technology)
+ * @param {object}  details        - Payment details from the 402 response body
+ * @param {string}  details.amount    - Amount in USDC (e.g. "0.01")
+ * @param {string}  details.recipient - Recipient address (FeeSplitter contract or platform wallet)
+ * @param {string}  apiUrl         - Original API URL (used as resource in paymentRequirements)
+ * @returns {string} txHash
+ * @throws {Error} if the facilitator rejects the settlement
+ */
+export async function sendViaFacilitator(privateKey, facilitatorUrl, details, apiUrl) {
+  const { walletClient, account } = buildPolygonClients(privateKey);
+
+  const cost = parseFloat(details.amount);
+  const amountRaw = BigInt(Math.round(cost * 1e6));
+
+  const validAfter = 0;
+  const validBefore = Math.floor(Date.now() / 1000) + 300; // 5 minutes
+
+  const recipient = details.recipient;
+
+  // Step 1: Sign EIP-3009 TransferWithAuthorization off-chain (zero gas)
+  const { signature, authorization } = await signEIP3009Auth(
+    walletClient,
+    account,
+    amountRaw.toString(),
+    recipient,
+    validAfter,
+    validBefore,
+  );
+
+  // Step 2: Build x402 paymentPayload (Version 1, exact scheme, EVM)
+  const paymentPayload = {
+    x402Version: 1,
+    scheme:      'exact',
+    network:     'polygon',
+    payload:     { signature, authorization },
+  };
+
+  const paymentRequirements = {
+    scheme:            'exact',
+    network:           'polygon',
+    maxAmountRequired: amountRaw.toString(),
+    resource:          apiUrl,
+    description:       'x402 Bazaar API payment',
+    mimeType:          'application/json',
+    payTo:             recipient,
+    asset:             POLYGON_USDC_CONTRACT,
+    maxTimeoutSeconds: 60,
+  };
+
+  // Step 3: POST to facilitator /settle
+  const settleUrl = `${facilitatorUrl}/settle`;
+  const settleRes = await fetch(settleUrl, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ x402Version: 1, paymentPayload, paymentRequirements }),
+    signal:  AbortSignal.timeout(30000),
+  });
+
+  const settleData = await settleRes.json();
+
+  if (!settleData.success) {
+    throw new Error(
+      `Facilitator settlement failed: ${settleData.errorReason || 'unknown'} — ` +
+      `${settleData.errorMessage || JSON.stringify(settleData)}`
+    );
+  }
+
+  return settleData.transaction;
 }
 
 /**
