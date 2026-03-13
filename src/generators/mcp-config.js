@@ -32,6 +32,12 @@ export function generateMcpConfig({
     }
   }
 
+  // Polygon facilitator — gas-free payments via PIP-82
+  if (network === 'polygon') {
+    env.POLYGON_FACILITATOR_URL = 'https://x402.polygon.technology';
+    env.POLYGON_FEE_SPLITTER_CONTRACT = '0x820d4b07D09e5E07598464E6E36cB12561e0Ba56';
+  }
+
   const serverEntry = {
     command: 'node',
     args: [mcpServerPath],

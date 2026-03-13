@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('3.2.5');
+  .version('3.3.0');
 
 program
   .command('init')
@@ -33,7 +33,7 @@ program
   .option('--env <environment>', 'Force environment (claude-desktop, cursor, claude-code, vscode-continue, generic)')
   .option('--no-wallet', 'Skip wallet configuration (read-only mode)')
   .option('--server-url <url>', 'Custom server URL', 'https://x402-api.onrender.com')
-  .option('--network <network>', 'Network: skale, mainnet, or testnet')
+  .option('--network <network>', 'Network: skale, polygon, mainnet, or testnet')
   .option('--budget <amount>', 'Max USDC budget per session', '1.00')
   .action(initCommand);
 
@@ -43,7 +43,7 @@ program
   .option('--env <environment>', 'Target environment (claude-desktop, cursor, claude-code, vscode-continue, generic)')
   .option('--output <path>', 'Output file path')
   .option('--server-url <url>', 'Custom server URL', 'https://x402-api.onrender.com')
-  .option('--network <network>', 'Network: skale, mainnet, or testnet')
+  .option('--network <network>', 'Network: skale, polygon, mainnet, or testnet')
   .option('--budget <amount>', 'Max USDC budget per session', '1.00')
   .action(configCommand);
 
@@ -56,7 +56,7 @@ program
 program
   .command('list')
   .description('List all services on x402 Bazaar')
-  .option('--chain <chain>', 'Filter by chain (base or skale)')
+  .option('--chain <chain>', 'Filter by chain (base, skale, or polygon)')
   .option('--category <category>', 'Filter by category (ai, data, weather, etc.)')
   .option('--free', 'Show only free services')
   .option('--server-url <url>', 'Server URL', 'https://x402-api.onrender.com')

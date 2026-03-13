@@ -219,6 +219,7 @@ export async function initCommand(options) {
         message: 'Which network?',
         choices: [
           { name: 'SKALE on Base (ultra-low gas ~$0.0007/tx — recommended for AI agents)', value: 'skale' },
+          { name: 'Polygon (gas-free via x402 facilitator — no POL needed)', value: 'polygon' },
           { name: 'Base Mainnet (real USDC, requires ETH for gas)', value: 'mainnet' },
           { name: 'Base Sepolia (testnet, free tokens for testing)', value: 'testnet' },
         ],
@@ -286,6 +287,8 @@ export async function initCommand(options) {
         log.info(`Wallet address: ${chalk.bold(walletAddress)}`);
         if (network === 'skale') {
           log.dim(`  Explorer: https://skale-base-explorer.skalenodes.com/address/${walletAddress}`);
+        } else if (network === 'polygon') {
+          log.dim(`  PolygonScan: https://polygonscan.com/address/${walletAddress}`);
         } else {
           log.dim(`  BaseScan: https://basescan.org/address/${walletAddress}`);
         }
@@ -301,6 +304,16 @@ export async function initCommand(options) {
           log.dim(`  ${chalk.white('3.')} Gas (CREDITS) is auto-funded — no ETH needed on SKALE!`);
           console.log('');
           log.warn(`IMPORTANT: Send USDC on ${chalk.bold('SKALE on Base')} (chain ID 1187947933) — not Base or Ethereum!`);
+        } else if (network === 'polygon') {
+          log.info(chalk.bold('To activate payments, fund this wallet:'));
+          console.log('');
+          log.dim(`  ${chalk.white('1.')} Bridge USDC from any chain → Polygon via:`);
+          log.dim(`     ${chalk.cyan('https://jumper.exchange')} or ${chalk.cyan('https://x402bazaar.org/fund')}`);
+          log.dim(`  ${chalk.white('2.')} Or send ${chalk.bold('USDC')} directly to: ${chalk.hex('#34D399')(walletAddress)}`);
+          log.dim(`     (Even $1 USDC is enough — each API call costs $0.005-$0.05)`);
+          log.dim(`  ${chalk.white('3.')} ${chalk.bold('No gas needed!')} The x402 facilitator sponsors gas via PIP-82`);
+          console.log('');
+          log.warn(`IMPORTANT: Send ${chalk.bold('native USDC')} on ${chalk.bold('Polygon')} (chain ID 137) — not USDC.e!`);
         } else {
           log.info(chalk.bold('To activate payments, fund this wallet:'));
           console.log('');
@@ -482,7 +495,7 @@ export async function initCommand(options) {
     `Environment:    ${targetEnv.label}`,
     `Install dir:    ${installDir}`,
     `Server:         ${serverUrl}`,
-    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : network === 'skale' ? 'SKALE on Base' : 'Base Sepolia'}`,
+    `Network:        ${network === 'mainnet' ? 'Base Mainnet' : network === 'skale' ? 'SKALE on Base' : network === 'polygon' ? 'Polygon' : 'Base Sepolia'}`,
     `Budget limit:   ${maxBudget} USDC / session`,
     `Wallet:         ${walletLabel}`,
     `Services:       ${serviceCount > 0 ? serviceCount + ' available' : 'check with npx x402-bazaar status'}`,
@@ -493,7 +506,9 @@ export async function initCommand(options) {
       'Before your agent can pay for APIs:',
       network === 'skale'
         ? '  1. Bridge USDC → SKALE on Base: https://x402bazaar.org/fund (CREDITS auto-funded!)'
-        : '  1. Send USDC + a little ETH to your wallet on Base',
+        : network === 'polygon'
+          ? '  1. Send USDC to your wallet on Polygon (gas-free via x402 facilitator!)'
+          : '  1. Send USDC + a little ETH to your wallet on Base',
       '  2. Restart your IDE',
       '',
     ] : []),
@@ -525,6 +540,22 @@ export async function initCommand(options) {
     console.log('');
     console.log('  Fund USDC: https://x402bazaar.org/fund (bridge from any chain)');
     console.log('  Alternative bridge: https://bridge.skale.space');
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+  } else if (walletMode === 'generate' && network === 'polygon') {
+    console.log('');
+    console.log('='.repeat(70));
+    console.log('');
+    console.log('  IMPORTANT — After restarting, ask your agent to run: setup_wallet');
+    console.log('');
+    console.log('  This will:');
+    console.log('    - Show your wallet balance on Base, SKALE, and Polygon');
+    console.log('    - Provide bridge links to fund your wallet with USDC');
+    console.log('');
+    console.log('  Polygon uses the x402 facilitator — NO gas needed (PIP-82)!');
+    console.log('  Just send USDC to your wallet on Polygon.');
+    console.log('  Bridge: https://jumper.exchange or https://x402bazaar.org/fund');
     console.log('');
     console.log('='.repeat(70));
     console.log('');
