@@ -4,7 +4,7 @@
 
 > Connect your AI agent to the x402 Bazaar marketplace in one command.
 
-x402 Bazaar is an autonomous marketplace where AI agents buy and sell API services using the HTTP 402 protocol with USDC payments on Base L2.
+x402 Bazaar is an autonomous marketplace where AI agents buy and sell API services using the HTTP 402 protocol with USDC payments on Base L2, SKALE on Base, and Polygon.
 
 ## Quick Start
 
@@ -69,6 +69,7 @@ npx x402-bazaar list
 # Filter by blockchain network
 npx x402-bazaar list --chain base
 npx x402-bazaar list --chain skale
+npx x402-bazaar list --chain polygon
 
 # Filter by category
 npx x402-bazaar list --category ai
@@ -126,10 +127,10 @@ npx x402-bazaar wallet --balance
 
 x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 
-- **Agents pay with USDC** on Base L2 (Coinbase's Layer 2)
+- **Agents pay with USDC** on Base L2, SKALE on Base, or Polygon
 - **HTTP 402 protocol** — the server responds with payment details, the agent pays, then retries
-- **Every payment is verifiable** on-chain via BaseScan
-- **70+ services** available (search, AI, crypto, weather, and more)
+- **Every payment is verifiable** on-chain via BaseScan, SKALE Explorer, or PolygonScan
+- **74+ services** available (search, AI, crypto, weather, and more)
 
 ### Pricing
 
@@ -149,7 +150,7 @@ x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 
 | Repository | Description |
 |---|---|
-| **[x402-backend](https://github.com/Wintyx57/x402-backend)** | API server, 69 native endpoints, payment middleware, MCP server |
+| **[x402-backend](https://github.com/Wintyx57/x402-backend)** | API server, 74 native endpoints, payment middleware, MCP server |
 | **[x402-frontend](https://github.com/Wintyx57/x402-frontend)** | React + TypeScript UI, wallet connect |
 | **[x402-bazaar-cli](https://github.com/Wintyx57/x402-bazaar-cli)** | `npx x402-bazaar` -- CLI with 7 commands (this repo) |
 | **[x402-sdk](https://github.com/Wintyx57/x402-sdk)** | TypeScript SDK for AI agents |
