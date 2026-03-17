@@ -146,7 +146,7 @@ export async function initCommand(options) {
     if (!existsSync(pkgJsonPath)) {
       writeFileSync(pkgJsonPath, JSON.stringify({
         name: 'x402-bazaar-mcp',
-        version: '2.0.0',
+        version: '2.5.0',
         type: 'module',
         private: true,
         dependencies: {
