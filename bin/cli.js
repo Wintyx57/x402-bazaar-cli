@@ -25,7 +25,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('3.3.0');
+  .version('3.4.0');
 
 program
   .command('init')
@@ -88,7 +88,7 @@ program
 // Default: show help if no command given
 if (process.argv.length <= 2) {
   console.log('');
-  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v3'));
+  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v3.4.0'));
   console.log('');
   console.log('  Setup commands:');
   console.log(chalk.cyan('    npx x402-bazaar init') + chalk.dim('          Full interactive setup'));
