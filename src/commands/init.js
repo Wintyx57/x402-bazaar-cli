@@ -1,7 +1,7 @@
 import inquirer from 'inquirer';
 import ora from 'ora';
 import chalk from 'chalk';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, chmodSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, chmodSync, cpSync, readdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
 import { randomBytes } from 'crypto';
@@ -126,12 +126,31 @@ export async function initCommand(options) {
     if (mcpSource) {
       copyFileSync(mcpSource, mcpServerDest);
       spinner.text = 'Copied mcp-server.mjs from local project...';
+
+      // Copy lib/ and schemas/ directories (required by mcp-server.mjs)
+      const mcpSourceDir = dirname(mcpSource);
+      for (const subdir of ['lib', 'schemas']) {
+        const srcDir = join(mcpSourceDir, subdir);
+        const destDir = join(installDir, subdir);
+        if (existsSync(srcDir)) {
+          cpSync(srcDir, destDir, { recursive: true });
+          spinner.text = `Copied ${subdir}/ directory...`;
+        }
+      }
     } else {
       spinner.text = 'Downloading MCP server from GitHub...';
       try {
         const dlRes = await fetch('https://raw.githubusercontent.com/Wintyx57/x402-backend/main/mcp-server.mjs');
         if (!dlRes.ok) throw new Error(`HTTP ${dlRes.status}`);
         writeFileSync(mcpServerDest, await dlRes.text());
+
+        // Download lib/protocolAdapter.js (required dependency)
+        const libDir = join(installDir, 'lib');
+        if (!existsSync(libDir)) mkdirSync(libDir, { recursive: true });
+        for (const libFile of ['protocolAdapter.js']) {
+          const libRes = await fetch(`https://raw.githubusercontent.com/Wintyx57/x402-backend/main/lib/${libFile}`);
+          if (libRes.ok) writeFileSync(join(libDir, libFile), await libRes.text());
+        }
       } catch (dlErr) {
         spinner.fail(`Could not download MCP server: ${dlErr.message}`);
         log.error('Download the file manually from:');
@@ -146,13 +165,13 @@ export async function initCommand(options) {
     if (!existsSync(pkgJsonPath)) {
       writeFileSync(pkgJsonPath, JSON.stringify({
         name: 'x402-bazaar-mcp',
-        version: '2.5.0',
-        type: 'module',
+        version: '2.6.0',
+        type: 'commonjs',
         private: true,
         dependencies: {
-          'viem': '^2.0.0',
-          '@modelcontextprotocol/sdk': '^1.26.0',
-          'dotenv': '^17.2.4',
+          'viem': '^2.45.0',
+          '@modelcontextprotocol/sdk': '^1.27.0',
+          'dotenv': '^17.3.0',
           'zod': '^4.3.6',
           'ed2curve': '^0.3.0',
           '@scure/bip32': '^1.6.0',
