@@ -218,7 +218,7 @@ export async function initCommand(options) {
               viem: "^2.45.0",
               "@modelcontextprotocol/sdk": "^1.27.0",
               dotenv: "^17.3.0",
-              zod: "^4.3.6",
+              zod: "^3.25.0",
               ed2curve: "^0.3.0",
               "@scure/bip32": "^1.6.0",
             },
