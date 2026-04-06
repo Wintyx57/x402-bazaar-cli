@@ -1,52 +1,100 @@
-import ora from 'ora';
-import chalk from 'chalk';
-import fs from 'fs';
-import path from 'path';
-import { log } from '../utils/logger.js';
+import ora from "ora";
+import chalk from "chalk";
+import fs from "fs";
+import path from "path";
+import { log } from "../utils/logger.js";
+
+/**
+ * Parse an array of "key=value" strings into a params object.
+ * Splits on the first `=` only; strips surrounding single or double quotes from values.
+ *
+ * @param {string[]} paramArray
+ * @returns {Record<string, string>}
+ */
+export function parseParams(paramArray) {
+  const params = {};
+  if (!paramArray || paramArray.length === 0) return params;
+
+  for (const p of paramArray) {
+    const [key, ...valueParts] = p.split("=");
+    if (!key || valueParts.length === 0) {
+      continue; // Skip invalid params
+    }
+    let value = valueParts.join("=");
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    params[key.trim()] = value;
+  }
+
+  return params;
+}
+
+/**
+ * Build a full URL from a base URL, an endpoint path, and optional query params.
+ * Ensures the endpoint always starts with `/`.
+ *
+ * @param {string} baseUrl
+ * @param {string} endpoint
+ * @param {Record<string, string>} params
+ * @returns {string}
+ */
+export function constructUrl(baseUrl, endpoint, params) {
+  const normalizedEndpoint = endpoint.startsWith("/")
+    ? endpoint
+    : `/${endpoint}`;
+  let url = `${baseUrl}${normalizedEndpoint}`;
+
+  if (Object.keys(params).length > 0) {
+    const queryString = new URLSearchParams(params).toString();
+    url = `${url}?${queryString}`;
+  }
+
+  return url;
+}
 
 export async function callCommand(endpoint, options) {
   if (!endpoint || endpoint.trim().length === 0) {
-    log.error('Endpoint is required');
-    log.dim('  Usage: x402-bazaar call <endpoint> [--param key=value...]');
-    log.dim('  Example: x402-bazaar call /api/weather --param city=Paris');
-    log.dim('  Example: x402-bazaar call /api/hash --param text=hello --key 0x...');
-    console.log('');
+    log.error("Endpoint is required");
+    log.dim("  Usage: x402-bazaar call <endpoint> [--param key=value...]");
+    log.dim("  Example: x402-bazaar call /api/weather --param city=Paris");
+    log.dim(
+      "  Example: x402-bazaar call /api/hash --param text=hello --key 0x...",
+    );
+    console.log("");
     process.exit(1);
   }
 
-  const serverUrl = options.serverUrl || 'https://x402-api.onrender.com';
-  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const fullUrl = `${serverUrl}${normalizedEndpoint}`;
+  const serverUrl = options.serverUrl || "https://x402-api.onrender.com";
+  const normalizedEndpoint = endpoint.startsWith("/")
+    ? endpoint
+    : `/${endpoint}`;
 
   log.banner();
   log.info(`Calling endpoint: ${chalk.bold(normalizedEndpoint)}`);
-  console.log('');
+  console.log("");
 
-  // Parse params
-  const params = {};
-  if (options.param) {
-    const paramArray = Array.isArray(options.param) ? options.param : [options.param];
-    for (const p of paramArray) {
-      const [key, ...valueParts] = p.split('=');
-      if (!key || valueParts.length === 0) {
-        log.warn(`Invalid param format: ${p} (expected key=value)`);
-        continue;
-      }
-      let value = valueParts.join('=');
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-      params[key.trim()] = value;
-    }
+  // Parse params — warn on invalid format before delegating to parseParams()
+  const rawParamArray = options.param
+    ? Array.isArray(options.param)
+      ? options.param
+      : [options.param]
+    : [];
+  for (const p of rawParamArray) {
+    if (!p.includes("="))
+      log.warn(`Invalid param format: ${p} (expected key=value)`);
   }
+  const params = parseParams(rawParamArray);
 
   if (Object.keys(params).length > 0) {
-    log.info('Parameters:');
+    log.info("Parameters:");
     for (const [k, v] of Object.entries(params)) {
       log.dim(`  ${k}: ${v}`);
     }
-    console.log('');
+    console.log("");
   }
 
   // Resolve private key for auto-payment
@@ -54,28 +102,25 @@ export async function callCommand(endpoint, options) {
   const autoPay = !!privateKey;
 
   if (autoPay) {
-    log.info(`Auto-payment: ${chalk.hex('#34D399').bold('enabled')}`);
+    log.info(`Auto-payment: ${chalk.hex("#34D399").bold("enabled")}`);
     try {
-      const { getAddressFromKey } = await import('../lib/payment.js');
+      const { getAddressFromKey } = await import("../lib/payment.js");
       const address = getAddressFromKey(privateKey);
       log.dim(`  Wallet: ${address.slice(0, 6)}...${address.slice(-4)}`);
-    } catch { /* ignore display errors */ }
-    console.log('');
+    } catch {
+      /* ignore display errors */
+    }
+    console.log("");
   }
 
-  // Build URL with query params
-  let finalUrl = fullUrl;
-  if (Object.keys(params).length > 0) {
-    const queryString = new URLSearchParams(params).toString();
-    finalUrl = `${fullUrl}?${queryString}`;
-  }
+  const finalUrl = constructUrl(serverUrl, normalizedEndpoint, params);
 
   const spinner = ora(`GET ${finalUrl}...`).start();
 
   try {
     const fetchOptions = {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
       signal: AbortSignal.timeout(30000),
     };
 
@@ -84,30 +129,38 @@ export async function callCommand(endpoint, options) {
 
     // Handle 402 Payment Required
     if (res.status === 402) {
-      console.log('');
-      log.warn(chalk.bold('Payment Required (HTTP 402)'));
-      console.log('');
+      console.log("");
+      log.warn(chalk.bold("Payment Required (HTTP 402)"));
+      console.log("");
 
       let paymentInfo;
       try {
         paymentInfo = await res.json();
       } catch {
-        log.error('Could not parse payment details');
+        log.error("Could not parse payment details");
         process.exit(1);
       }
 
       const price = paymentInfo.payment_details?.amount || paymentInfo.price;
-      const payTo = paymentInfo.payment_details?.recipient || paymentInfo.payment_details?.walletAddress || paymentInfo.paymentAddress;
+      const payTo =
+        paymentInfo.payment_details?.recipient ||
+        paymentInfo.payment_details?.walletAddress ||
+        paymentInfo.paymentAddress;
 
       // Split-native mode: provider_wallet is present in payment_details
-      const providerWallet = paymentInfo.payment_details?.provider_wallet || null;
+      const providerWallet =
+        paymentInfo.payment_details?.provider_wallet || null;
       const serverSplit = paymentInfo.payment_details?.split || null;
-      const isSplitMode = !!(providerWallet);
+      const isSplitMode = !!providerWallet;
 
       // Facilitator mode (Polygon Phase 2): payment_mode === 'fee_splitter'
       const paymentMode = paymentInfo.payment_details?.payment_mode || null;
-      const facilitatorUrl = paymentInfo.payment_details?.facilitator || paymentInfo.facilitator || null;
-      const isFacilitatorMode = paymentMode === 'fee_splitter' && !!facilitatorUrl;
+      const facilitatorUrl =
+        paymentInfo.payment_details?.facilitator ||
+        paymentInfo.facilitator ||
+        null;
+      const isFacilitatorMode =
+        paymentMode === "fee_splitter" && !!facilitatorUrl;
 
       if (price) {
         log.info(`Price: ${chalk.cyan.bold(`${price} USDC`)}`);
@@ -123,79 +176,99 @@ export async function callCommand(endpoint, options) {
       } else if (payTo) {
         log.dim(`  Pay to: ${payTo}`);
       }
-      console.log('');
+      console.log("");
 
       // Auto-pay if key is available
       if (autoPay && price && payTo) {
         if (isFacilitatorMode) {
           await handleFacilitatorPayment(
-            privateKey, price, facilitatorUrl, paymentInfo.payment_details, finalUrl, fetchOptions
+            privateKey,
+            price,
+            facilitatorUrl,
+            paymentInfo.payment_details,
+            finalUrl,
+            fetchOptions,
           );
         } else if (isSplitMode) {
           await handleSplitAutoPayment(
-            privateKey, price, providerWallet, payTo, serverSplit, finalUrl, fetchOptions
+            privateKey,
+            price,
+            providerWallet,
+            payTo,
+            serverSplit,
+            finalUrl,
+            fetchOptions,
           );
         } else {
-          await handleAutoPayment(privateKey, payTo, price, finalUrl, fetchOptions);
+          await handleAutoPayment(
+            privateKey,
+            payTo,
+            price,
+            finalUrl,
+            fetchOptions,
+          );
         }
         return;
       }
 
       // No auto-pay — show instructions
       log.separator();
-      console.log('');
-      log.info('To pay automatically, provide your private key:');
-      console.log('');
-      log.dim('  Option 1: Environment variable (recommended)');
-      log.dim('    export X402_PRIVATE_KEY=0xYourPrivateKey');
-      log.dim('    npx x402-bazaar call /api/weather --param city=Paris');
-      console.log('');
-      log.dim('  Option 2: Generate a wallet file');
-      log.dim('    npx x402-bazaar wallet --setup');
-      console.log('');
-      log.dim('  Option 3: --key flag (reads from wallet.json file)');
-      log.dim('    npx x402-bazaar call /api/weather --param city=Paris --key ~/.x402-bazaar/wallet.json');
-      console.log('');
-      log.dim('  Option 4: Use the MCP server (via Claude/Cursor)');
-      log.dim('    npx x402-bazaar init');
-      console.log('');
+      console.log("");
+      log.info("To pay automatically, provide your private key:");
+      console.log("");
+      log.dim("  Option 1: Environment variable (recommended)");
+      log.dim("    export X402_PRIVATE_KEY=0xYourPrivateKey");
+      log.dim("    npx x402-bazaar call /api/weather --param city=Paris");
+      console.log("");
+      log.dim("  Option 2: Generate a wallet file");
+      log.dim("    npx x402-bazaar wallet --setup");
+      console.log("");
+      log.dim("  Option 3: --key flag (reads from wallet.json file)");
+      log.dim(
+        "    npx x402-bazaar call /api/weather --param city=Paris --key ~/.x402-bazaar/wallet.json",
+      );
+      console.log("");
+      log.dim("  Option 4: Use the MCP server (via Claude/Cursor)");
+      log.dim("    npx x402-bazaar init");
+      console.log("");
       return;
     }
 
     // Handle other errors
     if (!res.ok) {
-      console.log('');
+      console.log("");
       log.error(`HTTP ${res.status}: ${res.statusText}`);
       try {
         const errorBody = await res.text();
         if (errorBody) {
-          console.log('');
-          log.dim('Response:');
+          console.log("");
+          log.dim("Response:");
           console.log(chalk.red(errorBody));
         }
-      } catch { /* ignore */ }
-      console.log('');
+      } catch {
+        /* ignore */
+      }
+      console.log("");
       process.exit(1);
     }
 
     // Success
     await displayResponse(res);
-
   } catch (err) {
-    spinner.fail('Request failed');
-    console.log('');
+    spinner.fail("Request failed");
+    console.log("");
 
-    if (err.name === 'AbortError') {
-      log.error('Request timeout (30s)');
-      log.dim('  Try again or check status: npx x402-bazaar status');
-    } else if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-      log.error('Cannot connect to server');
+    if (err.name === "AbortError") {
+      log.error("Request timeout (30s)");
+      log.dim("  Try again or check status: npx x402-bazaar status");
+    } else if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") {
+      log.error("Cannot connect to server");
       log.dim(`  Server URL: ${serverUrl}`);
     } else {
       log.error(err.message);
     }
 
-    console.log('');
+    console.log("");
     process.exit(1);
   }
 }
@@ -207,12 +280,20 @@ function resolvePrivateKey(options) {
   if (options.key) {
     const raw = options.key.trim();
     // Warn if a raw private key is passed directly as CLI argument (visible in ps aux, shell history)
-    const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
+    const hex = raw.startsWith("0x") ? raw.slice(2) : raw;
     if (/^[0-9a-fA-F]{64}$/.test(hex)) {
-      console.log('');
-      console.warn(chalk.yellow('⚠️  Warning: Using --key on the command line exposes your private key in shell history.'));
-      console.warn(chalk.yellow('⚠️  Prefer setting the X402_PRIVATE_KEY environment variable instead.'));
-      console.log('');
+      console.log("");
+      console.warn(
+        chalk.yellow(
+          "⚠️  Warning: Using --key on the command line exposes your private key in shell history.",
+        ),
+      );
+      console.warn(
+        chalk.yellow(
+          "⚠️  Prefer setting the X402_PRIVATE_KEY environment variable instead.",
+        ),
+      );
+      console.log("");
     }
     return normalizeKey(options.key);
   }
@@ -224,21 +305,23 @@ function resolvePrivateKey(options) {
   // Try local wallet file
   try {
     const home = process.env.HOME || process.env.USERPROFILE;
-    const walletPath = path.join(home, '.x402-bazaar', 'wallet.json');
+    const walletPath = path.join(home, ".x402-bazaar", "wallet.json");
     if (fs.existsSync(walletPath)) {
-      const data = JSON.parse(fs.readFileSync(walletPath, 'utf-8'));
+      const data = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
       if (data.privateKey) {
         return normalizeKey(data.privateKey);
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return null;
 }
 
 function normalizeKey(key) {
   key = key.trim();
-  if (!key.startsWith('0x')) key = '0x' + key;
+  if (!key.startsWith("0x")) key = "0x" + key;
   if (!/^0x[a-fA-F0-9]{64}$/.test(key)) return null;
   return key;
 }
@@ -261,61 +344,76 @@ function normalizeKey(key) {
  * @param {object} fetchOptions    - Fetch options for the retry request
  */
 async function handleFacilitatorPayment(
-  privateKey, price, facilitatorUrl, details, url, fetchOptions
+  privateKey,
+  price,
+  facilitatorUrl,
+  details,
+  url,
+  fetchOptions,
 ) {
   const spinner = ora(
-    `Signing EIP-3009 permit and settling via Polygon facilitator (gas-free)...`
+    `Signing EIP-3009 permit and settling via Polygon facilitator (gas-free)...`,
   ).start();
 
   let txHash;
 
   try {
-    const { sendViaFacilitator } = await import('../lib/payment.js');
+    const { sendViaFacilitator } = await import("../lib/payment.js");
     txHash = await sendViaFacilitator(privateKey, facilitatorUrl, details, url);
 
     spinner.succeed(
-      `Facilitator settlement confirmed: ${chalk.hex('#34D399').bold(`${price} USDC`)} ` +
-      `(gas-free via Polygon facilitator)`
+      `Facilitator settlement confirmed: ${chalk.hex("#34D399").bold(`${price} USDC`)} ` +
+        `(gas-free via Polygon facilitator)`,
     );
     log.dim(`  Tx: https://polygonscan.com/tx/${txHash}`);
-    console.log('');
+    console.log("");
   } catch (facilitatorErr) {
-    spinner.warn(`Facilitator payment failed — falling back to direct transfer`);
+    spinner.warn(
+      `Facilitator payment failed — falling back to direct transfer`,
+    );
     log.dim(`  Reason: ${facilitatorErr.message}`);
-    console.log('');
+    console.log("");
 
     // Fallback: direct USDC transfer on Polygon (standard sendUsdcPayment on Base
     // is intentionally NOT used here; we log a clear message and exit so the user
     // knows they need MATIC gas or can retry manually)
-    log.error('Fallback direct transfer not available for Polygon in facilitator mode.');
-    log.dim('  Ensure POLYGON_FACILITATOR_URL is reachable or retry later.');
-    log.dim('  You can also send USDC manually and provide --key with sufficient MATIC for gas.');
-    console.log('');
+    log.error(
+      "Fallback direct transfer not available for Polygon in facilitator mode.",
+    );
+    log.dim("  Ensure POLYGON_FACILITATOR_URL is reachable or retry later.");
+    log.dim(
+      "  You can also send USDC manually and provide --key with sufficient MATIC for gas.",
+    );
+    console.log("");
     process.exit(1);
   }
 
   // Retry with facilitator payment proof
-  const retrySpinner = ora('Retrying with facilitator payment proof...').start();
+  const retrySpinner = ora(
+    "Retrying with facilitator payment proof...",
+  ).start();
 
   const retryRes = await fetch(url, {
     ...fetchOptions,
     headers: {
       ...fetchOptions.headers,
-      'X-Payment-TxHash': txHash,
-      'X-Payment-Chain':  'polygon',
+      "X-Payment-TxHash": txHash,
+      "X-Payment-Chain": "polygon",
     },
   });
 
   retrySpinner.stop();
 
   if (!retryRes.ok) {
-    console.log('');
+    console.log("");
     log.error(`HTTP ${retryRes.status}: ${retryRes.statusText}`);
     try {
       const body = await retryRes.text();
       if (body) console.log(chalk.red(body));
-    } catch { /* ignore */ }
-    console.log('');
+    } catch {
+      /* ignore */
+    }
+    console.log("");
     process.exit(1);
   }
 
@@ -338,14 +436,20 @@ async function handleFacilitatorPayment(
  * @param {object}      fetchOptions  - Fetch options passed to the retry request
  */
 async function handleSplitAutoPayment(
-  privateKey, totalPrice, providerWallet, platformWallet, serverSplit, url, fetchOptions
+  privateKey,
+  totalPrice,
+  providerWallet,
+  platformWallet,
+  serverSplit,
+  url,
+  fetchOptions,
 ) {
   const spinner = ora(
-    `Sending ${totalPrice} USDC (split: 95% provider / 5% platform)...`
+    `Sending ${totalPrice} USDC (split: 95% provider / 5% platform)...`,
   ).start();
 
   try {
-    const { sendSplitUsdcPayment } = await import('../lib/payment.js');
+    const { sendSplitUsdcPayment } = await import("../lib/payment.js");
 
     const result = await sendSplitUsdcPayment(privateKey, {
       totalAmountUsdc: totalPrice,
@@ -356,58 +460,67 @@ async function handleSplitAutoPayment(
 
     spinner.succeed(
       `Split payment confirmed: ` +
-      chalk.hex('#34D399').bold(`${result.providerAmountUsdc.toFixed(6)} USDC`) +
-      ` to provider + ` +
-      chalk.hex('#34D399').bold(`${result.platformAmountUsdc.toFixed(6)} USDC`) +
-      ` to platform`
+        chalk
+          .hex("#34D399")
+          .bold(`${result.providerAmountUsdc.toFixed(6)} USDC`) +
+        ` to provider + ` +
+        chalk
+          .hex("#34D399")
+          .bold(`${result.platformAmountUsdc.toFixed(6)} USDC`) +
+        ` to platform`,
     );
     log.dim(`  Provider tx: ${result.explorerProvider}`);
     log.dim(`  Platform tx: ${result.explorerPlatform}`);
-    console.log('');
+    console.log("");
 
     // Retry with both payment proofs
-    const retrySpinner = ora('Retrying with split payment proof...').start();
+    const retrySpinner = ora("Retrying with split payment proof...").start();
 
     const retryRes = await fetch(url, {
       ...fetchOptions,
       headers: {
         ...fetchOptions.headers,
-        'X-Payment-TxHash-Provider': result.txHashProvider,
-        'X-Payment-TxHash-Platform': result.txHashPlatform,
+        "X-Payment-TxHash-Provider": result.txHashProvider,
+        "X-Payment-TxHash-Platform": result.txHashPlatform,
       },
     });
 
     retrySpinner.stop();
 
     if (!retryRes.ok) {
-      console.log('');
+      console.log("");
       log.error(`HTTP ${retryRes.status}: ${retryRes.statusText}`);
       try {
         const body = await retryRes.text();
         if (body) console.log(chalk.red(body));
-      } catch { /* ignore */ }
-      console.log('');
+      } catch {
+        /* ignore */
+      }
+      console.log("");
       process.exit(1);
     }
 
     await displayResponse(retryRes);
-
   } catch (err) {
-    spinner.fail('Split payment failed');
-    console.log('');
+    spinner.fail("Split payment failed");
+    console.log("");
 
-    if (err.message.includes('Insufficient USDC')) {
+    if (err.message.includes("Insufficient USDC")) {
       log.error(err.message);
-      log.dim('  Fund your wallet with USDC on Base.');
-      log.dim('  Check balance: npx x402-bazaar wallet --address <your-address>');
-    } else if (err.message.includes('Amount too small')) {
+      log.dim("  Fund your wallet with USDC on Base.");
+      log.dim(
+        "  Check balance: npx x402-bazaar wallet --address <your-address>",
+      );
+    } else if (err.message.includes("Amount too small")) {
       log.error(err.message);
-      log.dim('  The service price is too low for a split payment (minimum 0.0001 USDC).');
+      log.dim(
+        "  The service price is too low for a split payment (minimum 0.0001 USDC).",
+      );
     } else {
       log.error(err.message);
     }
 
-    console.log('');
+    console.log("");
     process.exit(1);
   }
 }
@@ -419,52 +532,57 @@ async function handleAutoPayment(privateKey, payTo, price, url, fetchOptions) {
   const spinner = ora(`Sending ${price} USDC on Base mainnet...`).start();
 
   try {
-    const { sendUsdcPayment } = await import('../lib/payment.js');
+    const { sendUsdcPayment } = await import("../lib/payment.js");
     const payment = await sendUsdcPayment(privateKey, payTo, price);
 
-    spinner.succeed(`Payment confirmed: ${chalk.hex('#34D399').bold(`${price} USDC`)}`);
+    spinner.succeed(
+      `Payment confirmed: ${chalk.hex("#34D399").bold(`${price} USDC`)}`,
+    );
     log.dim(`  Tx: ${payment.explorer}`);
-    console.log('');
+    console.log("");
 
     // Retry with payment proof
-    const retrySpinner = ora('Retrying with payment proof...').start();
+    const retrySpinner = ora("Retrying with payment proof...").start();
 
     const retryRes = await fetch(url, {
       ...fetchOptions,
       headers: {
         ...fetchOptions.headers,
-        'X-Payment-TxHash': payment.txHash,
+        "X-Payment-TxHash": payment.txHash,
       },
     });
 
     retrySpinner.stop();
 
     if (!retryRes.ok) {
-      console.log('');
+      console.log("");
       log.error(`HTTP ${retryRes.status}: ${retryRes.statusText}`);
       try {
         const body = await retryRes.text();
         if (body) console.log(chalk.red(body));
-      } catch { /* ignore */ }
-      console.log('');
+      } catch {
+        /* ignore */
+      }
+      console.log("");
       process.exit(1);
     }
 
     await displayResponse(retryRes);
-
   } catch (err) {
-    spinner.fail('Payment failed');
-    console.log('');
+    spinner.fail("Payment failed");
+    console.log("");
 
-    if (err.message.includes('Insufficient USDC')) {
+    if (err.message.includes("Insufficient USDC")) {
       log.error(err.message);
-      log.dim('  Fund your wallet with USDC on Base.');
-      log.dim('  Check balance: npx x402-bazaar wallet --address <your-address>');
+      log.dim("  Fund your wallet with USDC on Base.");
+      log.dim(
+        "  Check balance: npx x402-bazaar wallet --address <your-address>",
+      );
     } else {
       log.error(err.message);
     }
 
-    console.log('');
+    console.log("");
     process.exit(1);
   }
 }
@@ -473,39 +591,39 @@ async function handleAutoPayment(privateKey, payTo, price, url, fetchOptions) {
  * Display API response with JSON highlighting
  */
 async function displayResponse(res) {
-  console.log('');
+  console.log("");
   log.success(`${chalk.bold(res.status)} ${res.statusText}`);
-  console.log('');
+  console.log("");
 
-  const contentType = res.headers.get('content-type') || '';
+  const contentType = res.headers.get("content-type") || "";
 
-  if (contentType.includes('application/json')) {
+  if (contentType.includes("application/json")) {
     const responseData = await res.json();
     log.separator();
-    console.log('');
-    log.info('Response (JSON):');
-    console.log('');
+    console.log("");
+    log.info("Response (JSON):");
+    console.log("");
     console.log(highlightJson(JSON.stringify(responseData, null, 2)));
-    console.log('');
+    console.log("");
     log.separator();
   } else {
     const responseText = await res.text();
     log.separator();
-    console.log('');
-    log.info('Response:');
-    console.log('');
+    console.log("");
+    log.info("Response:");
+    console.log("");
     console.log(chalk.white(responseText));
-    console.log('');
+    console.log("");
     log.separator();
   }
-  console.log('');
+  console.log("");
 }
 
 function highlightJson(jsonString) {
   return jsonString
-    .replace(/"([^"]+)":/g, chalk.hex('#60A5FA')('"$1"') + ':')
-    .replace(/: "([^"]+)"/g, ': ' + chalk.hex('#34D399')('"$1"'))
-    .replace(/: (\d+\.?\d*)/g, ': ' + chalk.hex('#FBBF24')('$1'))
-    .replace(/: (true|false)/g, ': ' + chalk.hex('#9333EA')('$1'))
-    .replace(/: null/g, ': ' + chalk.hex('#6B7280')('null'));
+    .replace(/"([^"]+)":/g, chalk.hex("#60A5FA")('"$1"') + ":")
+    .replace(/: "([^"]+)"/g, ": " + chalk.hex("#34D399")('"$1"'))
+    .replace(/: (\d+\.?\d*)/g, ": " + chalk.hex("#FBBF24")("$1"))
+    .replace(/: (true|false)/g, ": " + chalk.hex("#9333EA")("$1"))
+    .replace(/: null/g, ": " + chalk.hex("#6B7280")("null"));
 }
