@@ -160,7 +160,19 @@ export async function initCommand(options) {
         const srcDir = join(mcpSourceDir, subdir);
         const destDir = join(installDir, subdir);
         if (existsSync(srcDir)) {
-          cpSync(srcDir, destDir, { recursive: true });
+          try {
+            cpSync(srcDir, destDir, { recursive: true, force: true });
+          } catch {
+            // Fallback: copy files individually (Windows compat)
+            if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+            for (const f of readdirSync(srcDir)) {
+              try {
+                copyFileSync(join(srcDir, f), join(destDir, f));
+              } catch (err) {
+                spinner.warn(`Could not copy ${subdir}/${f}: ${err.message}`);
+              }
+            }
+          }
           spinner.text = `Copied ${subdir}/ directory...`;
         }
       }
