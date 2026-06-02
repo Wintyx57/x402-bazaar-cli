@@ -42,9 +42,9 @@
   },
   "dependencies": {
     "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "inquirer": "^9.3.0",
-    "ora": "^8.0.1",
+    "commander": "^15.0.0",
+    "inquirer": "^14.0.2",
+    "ora": "^9.4.0",
     "viem": "^2.45.3"
   }
 }
