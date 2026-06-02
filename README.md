@@ -130,15 +130,15 @@ x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 - **Agents pay with USDC** on Base L2, SKALE on Base, or Polygon
 - **HTTP 402 protocol** — the server responds with payment details, the agent pays, then retries
 - **Every payment is verifiable** on-chain via BaseScan, SKALE Explorer, or PolygonScan
-- **112+ services** available (search, AI, crypto, weather, and more)
+- **155 services** available (search, AI, crypto, weather, and more)
 
 ### Pricing
 
 | Action | Cost |
 |--------|------|
 | Browse marketplace info | Free |
-| Search services | 0.05 USDC |
-| List all services | 0.05 USDC |
+| Search services | Free |
+| List all services | Free |
 | Register a new service | 1.00 USDC |
 
 ## Requirements
@@ -150,7 +150,7 @@ x402 Bazaar is a marketplace where AI agents autonomously trade API services:
 
 | Repository | Description |
 |---|---|
-| **[x402-backend](https://github.com/Wintyx57/x402-backend)** | API server, 112 native endpoints, payment middleware, MCP server |
+| **[x402-backend](https://github.com/Wintyx57/x402-backend)** | API server, 101 native endpoints, payment middleware, MCP server |
 | **[x402-frontend](https://github.com/Wintyx57/x402-frontend)** | React + TypeScript UI, wallet connect |
 | **[x402-bazaar-cli](https://github.com/Wintyx57/x402-bazaar-cli)** | `npx x402-bazaar` -- CLI with 7 commands (this repo) |
 | **[x402-sdk](https://github.com/Wintyx57/x402-sdk)** | TypeScript SDK for AI agents |

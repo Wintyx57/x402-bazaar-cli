@@ -1,0 +1,52 @@
+# Dependabot — weekly security + minor updates.
+#
+# Scope:
+#  - npm (CLI deps)
+#  - github-actions (SHA-pinned actions refresh suggestions)
+#
+# Strategy:
+#  - Group semantically-equivalent updates to avoid PR firehose.
+#  - Security updates are always separate (highest priority).
+#  - Major bumps require manual triage.
+
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cli-ui-deps:
+        patterns:
+          - "chalk"
+          - "ora"
+          - "inquirer"
+          - "commander"
+      viem-ecosystem:
+        patterns:
+          - "viem"
+          - "abitype"
+      lint-deps:
+        patterns:
+          - "eslint*"
+          - "prettier"
+      types:
+        patterns:
+          - "@types/*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(ci)"

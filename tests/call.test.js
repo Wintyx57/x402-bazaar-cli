@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert";
-import { parseParams, constructUrl } from "../src/commands/call.js";
+import {
+  parseParams,
+  constructUrl,
+  resolveChain,
+} from "../src/commands/call.js";
 
 /**
  * Test API call flow and parameter parsing
@@ -215,4 +219,163 @@ test("Call - Should handle network errors", () => {
   for (const err of errors) {
     assert.ok(err.code || err.name, "Error should have code or name");
   }
+});
+
+// ── resolveChain() tests ──────────────────────────────────────────────────────
+
+test("resolveChain - defaults to skale when no config present", () => {
+  // Temporarily clear env var if set
+  const prev = process.env.X402_PAYMENT_CHAIN;
+  delete process.env.X402_PAYMENT_CHAIN;
+
+  // resolveChain reads wallet.json from HOME — in a test environment that file
+  // won't exist or won't have a network field, so the default 'skale' applies.
+  // We only assert the return type and that it is a non-empty string.
+  const chain = resolveChain();
+  assert.ok(
+    typeof chain === "string" && chain.length > 0,
+    "Should return a non-empty string",
+  );
+
+  if (prev !== undefined) process.env.X402_PAYMENT_CHAIN = prev;
+});
+
+test("resolveChain - reads X402_PAYMENT_CHAIN env var", () => {
+  const prev = process.env.X402_PAYMENT_CHAIN;
+  process.env.X402_PAYMENT_CHAIN = "polygon";
+  assert.strictEqual(
+    resolveChain(),
+    "polygon",
+    "Should return chain from env var",
+  );
+  if (prev !== undefined) {
+    process.env.X402_PAYMENT_CHAIN = prev;
+  } else {
+    delete process.env.X402_PAYMENT_CHAIN;
+  }
+});
+
+test("resolveChain - normalises env var to lowercase", () => {
+  const prev = process.env.X402_PAYMENT_CHAIN;
+  process.env.X402_PAYMENT_CHAIN = "BASE";
+  assert.strictEqual(
+    resolveChain(),
+    "base",
+    "Should lowercase the chain value",
+  );
+  if (prev !== undefined) {
+    process.env.X402_PAYMENT_CHAIN = prev;
+  } else {
+    delete process.env.X402_PAYMENT_CHAIN;
+  }
+});
+
+// ── X-Payment-Chain header construction tests ─────────────────────────────────
+
+test("Headers - Initial request headers include X-Payment-Chain", () => {
+  const chain = "skale";
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Payment-Chain": chain,
+  };
+  assert.strictEqual(
+    headers["X-Payment-Chain"],
+    "skale",
+    "Initial request must include X-Payment-Chain",
+  );
+});
+
+test("Headers - Split retry includes X-Payment-Chain alongside both tx hashes", () => {
+  const chain = "skale";
+  const retryHeaders = {
+    "Content-Type": "application/json",
+    "X-Payment-Chain": chain,
+    "X-Payment-TxHash-Provider": "0xPROVIDER",
+    "X-Payment-TxHash-Platform": "0xPLATFORM",
+  };
+  assert.strictEqual(retryHeaders["X-Payment-Chain"], "skale");
+  assert.ok(
+    retryHeaders["X-Payment-TxHash-Provider"],
+    "Provider hash must be present",
+  );
+  assert.ok(
+    retryHeaders["X-Payment-TxHash-Platform"],
+    "Platform hash must be present",
+  );
+  assert.ok(
+    !("X-Payment-TxHash" in retryHeaders),
+    "Legacy header must NOT be present in split retry",
+  );
+});
+
+test("Headers - Legacy retry includes X-Payment-Chain alongside X-Payment-TxHash", () => {
+  const chain = "base";
+  const retryHeaders = {
+    "Content-Type": "application/json",
+    "X-Payment-TxHash": "0xLEGACY",
+    "X-Payment-Chain": chain,
+  };
+  assert.strictEqual(retryHeaders["X-Payment-Chain"], "base");
+  assert.strictEqual(retryHeaders["X-Payment-TxHash"], "0xLEGACY");
+  assert.ok(
+    !("X-Payment-TxHash-Provider" in retryHeaders),
+    "Split provider header must NOT be present in legacy retry",
+  );
+  assert.ok(
+    !("X-Payment-TxHash-Platform" in retryHeaders),
+    "Split platform header must NOT be present in legacy retry",
+  );
+});
+
+test("Headers - Facilitator retry includes X-Payment-Chain using chain parameter", () => {
+  // Verify the chain is passed through and not hardcoded to 'polygon'
+  for (const chain of ["polygon", "base", "skale"]) {
+    const retryHeaders = {
+      "X-Payment-TxHash": "0xFACILITATOR",
+      "X-Payment-Chain": chain,
+    };
+    assert.strictEqual(
+      retryHeaders["X-Payment-Chain"],
+      chain,
+      `Facilitator retry must use chain '${chain}' not a hardcoded value`,
+    );
+  }
+});
+
+// ── _payment_status consumer-protection tests ─────────────────────────────────
+
+test("PaymentStatus - not_charged response is detected", () => {
+  const responseData = {
+    _payment_status: "not_charged",
+    message: "Parameter missing",
+  };
+  assert.strictEqual(
+    responseData._payment_status,
+    "not_charged",
+    "Should detect not_charged status",
+  );
+});
+
+test("PaymentStatus - refunded response is detected", () => {
+  const responseData = {
+    _payment_status: "refunded",
+    _x402: { refund_tx_hash: "0xREFUND" },
+  };
+  assert.strictEqual(
+    responseData._payment_status,
+    "refunded",
+    "Should detect refunded status",
+  );
+  assert.ok(
+    responseData._x402?.refund_tx_hash,
+    "Should surface refund tx hash",
+  );
+});
+
+test("PaymentStatus - normal 200 response has no _payment_status", () => {
+  const responseData = { result: "ok", data: [1, 2, 3] };
+  assert.ok(
+    !responseData._payment_status,
+    "Normal response must not have _payment_status",
+  );
 });

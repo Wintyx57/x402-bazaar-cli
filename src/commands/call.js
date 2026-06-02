@@ -100,6 +100,8 @@ export async function callCommand(endpoint, options) {
   // Resolve private key for auto-payment
   const privateKey = resolvePrivateKey(options);
   const autoPay = !!privateKey;
+  // Resolve chain from wallet config / env (default: skale per project default)
+  const chain = resolveChain();
 
   if (autoPay) {
     log.info(`Auto-payment: ${chalk.hex("#34D399").bold("enabled")}`);
@@ -107,6 +109,7 @@ export async function callCommand(endpoint, options) {
       const { getAddressFromKey } = await import("../lib/payment.js");
       const address = getAddressFromKey(privateKey);
       log.dim(`  Wallet: ${address.slice(0, 6)}...${address.slice(-4)}`);
+      log.dim(`  Chain:  ${chain}`);
     } catch {
       /* ignore display errors */
     }
@@ -118,9 +121,14 @@ export async function callCommand(endpoint, options) {
   const spinner = ora(`GET ${finalUrl}...`).start();
 
   try {
+    // Always include X-Payment-Chain on the initial request so the backend
+    // returns the correct payment_mode for the selected chain (e.g. fee_splitter for Polygon).
     const fetchOptions = {
       method: "GET",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Payment-Chain": chain,
+      },
       signal: AbortSignal.timeout(30000),
     };
 
@@ -188,6 +196,7 @@ export async function callCommand(endpoint, options) {
             paymentInfo.payment_details,
             finalUrl,
             fetchOptions,
+            chain,
           );
         } else if (isSplitMode) {
           await handleSplitAutoPayment(
@@ -198,6 +207,7 @@ export async function callCommand(endpoint, options) {
             serverSplit,
             finalUrl,
             fetchOptions,
+            chain,
           );
         } else {
           await handleAutoPayment(
@@ -206,6 +216,7 @@ export async function callCommand(endpoint, options) {
             price,
             finalUrl,
             fetchOptions,
+            chain,
           );
         }
         return;
@@ -271,6 +282,32 @@ export async function callCommand(endpoint, options) {
     console.log("");
     process.exit(1);
   }
+}
+
+/**
+ * Resolve the payment chain from: X402_PAYMENT_CHAIN env > wallet.json `network` field > 'skale' (project default).
+ * The returned value matches the X-Payment-Chain header values used by the backend
+ * (e.g. 'skale', 'base', 'polygon').
+ *
+ * @returns {string}
+ */
+export function resolveChain() {
+  if (process.env.X402_PAYMENT_CHAIN) {
+    return process.env.X402_PAYMENT_CHAIN.trim().toLowerCase();
+  }
+  try {
+    const home = process.env.HOME || process.env.USERPROFILE;
+    const walletPath = path.join(home, ".x402-bazaar", "wallet.json");
+    if (fs.existsSync(walletPath)) {
+      const data = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
+      if (data.network && typeof data.network === "string") {
+        return data.network.trim().toLowerCase();
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return "skale";
 }
 
 /**
@@ -342,6 +379,7 @@ function normalizeKey(key) {
  * @param {object} details         - payment_details from the 402 response
  * @param {string} url             - API endpoint URL
  * @param {object} fetchOptions    - Fetch options for the retry request
+ * @param {string} chain           - Payment chain identifier (e.g. 'skale', 'base', 'polygon')
  */
 async function handleFacilitatorPayment(
   privateKey,
@@ -350,6 +388,7 @@ async function handleFacilitatorPayment(
   details,
   url,
   fetchOptions,
+  chain,
 ) {
   const spinner = ora(
     `Signing EIP-3009 permit and settling via Polygon facilitator (gas-free)...`,
@@ -398,7 +437,7 @@ async function handleFacilitatorPayment(
     headers: {
       ...fetchOptions.headers,
       "X-Payment-TxHash": txHash,
-      "X-Payment-Chain": "polygon",
+      "X-Payment-Chain": chain,
     },
   });
 
@@ -434,6 +473,7 @@ async function handleFacilitatorPayment(
  * @param {object|null} serverSplit   - Optional split amounts from 402 payment_details.split
  * @param {string}      url           - API endpoint URL
  * @param {object}      fetchOptions  - Fetch options passed to the retry request
+ * @param {string}      chain         - Payment chain identifier (e.g. 'skale', 'base', 'polygon')
  */
 async function handleSplitAutoPayment(
   privateKey,
@@ -443,6 +483,7 @@ async function handleSplitAutoPayment(
   serverSplit,
   url,
   fetchOptions,
+  chain,
 ) {
   const spinner = ora(
     `Sending ${totalPrice} USDC (split: 95% provider / 5% platform)...`,
@@ -456,6 +497,7 @@ async function handleSplitAutoPayment(
       providerWallet,
       platformWallet,
       serverSplit,
+      chain,
     });
 
     spinner.succeed(
@@ -473,7 +515,7 @@ async function handleSplitAutoPayment(
     log.dim(`  Platform tx: ${result.explorerPlatform}`);
     console.log("");
 
-    // Retry with both payment proofs
+    // Retry with both payment proofs + chain header
     const retrySpinner = ora("Retrying with split payment proof...").start();
 
     const retryRes = await fetch(url, {
@@ -482,6 +524,7 @@ async function handleSplitAutoPayment(
         ...fetchOptions.headers,
         "X-Payment-TxHash-Provider": result.txHashProvider,
         "X-Payment-TxHash-Platform": result.txHashPlatform,
+        "X-Payment-Chain": chain,
       },
     });
 
@@ -526,14 +569,28 @@ async function handleSplitAutoPayment(
 }
 
 /**
- * Handle automatic x402 payment and retry
+ * Handle automatic x402 payment and retry (legacy mode — single tx to platform wallet).
+ *
+ * @param {string} privateKey  - Agent private key (hex, with 0x)
+ * @param {string} payTo       - Recipient wallet address (platform)
+ * @param {number} price       - Amount in USDC
+ * @param {string} url         - API endpoint URL
+ * @param {object} fetchOptions - Fetch options for the retry request
+ * @param {string} chain       - Payment chain identifier (e.g. 'skale', 'base', 'polygon')
  */
-async function handleAutoPayment(privateKey, payTo, price, url, fetchOptions) {
-  const spinner = ora(`Sending ${price} USDC on Base mainnet...`).start();
+async function handleAutoPayment(
+  privateKey,
+  payTo,
+  price,
+  url,
+  fetchOptions,
+  chain,
+) {
+  const spinner = ora(`Sending ${price} USDC on ${chain} mainnet...`).start();
 
   try {
     const { sendUsdcPayment } = await import("../lib/payment.js");
-    const payment = await sendUsdcPayment(privateKey, payTo, price);
+    const payment = await sendUsdcPayment(privateKey, payTo, price, chain);
 
     spinner.succeed(
       `Payment confirmed: ${chalk.hex("#34D399").bold(`${price} USDC`)}`,
@@ -541,7 +598,7 @@ async function handleAutoPayment(privateKey, payTo, price, url, fetchOptions) {
     log.dim(`  Tx: ${payment.explorer}`);
     console.log("");
 
-    // Retry with payment proof
+    // Retry with payment proof + chain header
     const retrySpinner = ora("Retrying with payment proof...").start();
 
     const retryRes = await fetch(url, {
@@ -549,6 +606,7 @@ async function handleAutoPayment(privateKey, payTo, price, url, fetchOptions) {
       headers: {
         ...fetchOptions.headers,
         "X-Payment-TxHash": payment.txHash,
+        "X-Payment-Chain": chain,
       },
     });
 
@@ -599,6 +657,35 @@ async function displayResponse(res) {
 
   if (contentType.includes("application/json")) {
     const responseData = await res.json();
+
+    // Consumer protection: surface payment status anomalies even when HTTP 200.
+    // The backend sets _payment_status when the payment was not consumed or was refunded.
+    const paymentStatus = responseData?._payment_status;
+    if (paymentStatus === "not_charged") {
+      console.log("");
+      log.error("Payment was NOT charged by the server.");
+      log.dim(
+        "  The backend returned _payment_status: 'not_charged' — the tx hash was not accepted.",
+      );
+      log.dim(
+        "  Your USDC may still be on-chain. Contact support with your tx hash.",
+      );
+      console.log("");
+      process.exit(1);
+    }
+    if (paymentStatus === "refunded") {
+      console.log("");
+      log.warn("Payment was refunded by the server.");
+      log.dim(
+        "  The backend returned _payment_status: 'refunded' — your USDC was returned on-chain.",
+      );
+      if (responseData?._x402?.refund_tx_hash) {
+        log.dim(`  Refund tx: ${responseData._x402.refund_tx_hash}`);
+      }
+      console.log("");
+      process.exit(1);
+    }
+
     log.separator();
     console.log("");
     log.info("Response (JSON):");
