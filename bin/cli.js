@@ -9,6 +9,10 @@ import { searchCommand } from '../src/commands/search.js';
 import { callCommand } from '../src/commands/call.js';
 import { walletCommand } from '../src/commands/wallet.js';
 import chalk from 'chalk';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const packageJson = require('../package.json');
 
 // Global error handler
 process.on('unhandledRejection', (err) => {
@@ -25,7 +29,7 @@ const program = new Command();
 program
   .name('x402-bazaar')
   .description(chalk.hex('#FF9900')('x402 Bazaar') + ' — Connect your AI agent to the marketplace in one command')
-  .version('3.6.0');
+  .version(packageJson.version);
 
 program
   .command('init')
@@ -88,7 +92,7 @@ program
 // Default: show help if no command given
 if (process.argv.length <= 2) {
   console.log('');
-  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(' — AI Agent Marketplace CLI v3.4.0'));
+  console.log(chalk.hex('#FF9900').bold('  x402 Bazaar') + chalk.dim(` — AI Agent Marketplace CLI v${packageJson.version}`));
   console.log('');
   console.log('  Setup commands:');
   console.log(chalk.cyan('    npx x402-bazaar init') + chalk.dim('          Full interactive setup'));
