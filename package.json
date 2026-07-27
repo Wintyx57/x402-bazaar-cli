@@ -41,10 +41,10 @@
     "url": "https://github.com/Wintyx57/x402-bazaar-cli"
   },
   "dependencies": {
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "inquirer": "^9.3.0",
-    "ora": "^8.0.1",
+    "chalk": "^6.0.0",
+    "commander": "^15.0.0",
+    "inquirer": "^14.0.2",
+    "ora": "^9.4.1",
     "viem": "^2.45.3"
   }
 }
